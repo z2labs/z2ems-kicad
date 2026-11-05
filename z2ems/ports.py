@@ -76,9 +76,9 @@ def read_ports(board: Board) -> List[Port]:
         pads: Dict[str, Pad] = {pd.number: pd for pd in fp.definition.pads}
         sig, ref = pads.get("1") or pads.get("SIG"), pads.get("2") or pads.get("REF")
         if sig is not None:
-            p.sig_net = sig.net.name
+            p.sig_net = net_name(sig)
         if ref is not None:
-            p.ref_net = ref.net.name
+            p.ref_net = net_name(ref)
         if not p.sig_net:
             p.issues.append("SIG pad has no net (port not connected to a signal)")
         if not p.ref_net:
@@ -130,7 +130,7 @@ def suggest_ports(board: Board, ground_nets: Sequence[str] = ()) -> List[PortSug
         if not _RF_RE.search(text):
             continue
         pads = list(fp.definition.pads)
-        nets = [pd.net.name for pd in pads]
+        nets = [net_name(pd) for pd in pads]
         has_gnd = any(n and (n in gnd or GND_NET_RE.match(n)) for n in nets)
         # single-pad launch pads (test coupons) have no shield pad: keep them, lower score
         if not has_gnd and len(pads) > 1:
@@ -138,7 +138,7 @@ def suggest_ports(board: Board, ground_nets: Sequence[str] = ()) -> List[PortSug
         score = 0.9 if has_gnd else 0.7
         seen_nets: set[str] = set()
         for pad in pads:
-            n = pad.net.name
+            n = net_name(pad)
             if not n or n in gnd or GND_NET_RE.match(n) or n in existing or n in seen_nets:
                 continue
             seen_nets.add(n)
@@ -169,11 +169,17 @@ def suggest_ports(board: Board, ground_nets: Sequence[str] = ()) -> List[PortSug
     return out
 
 
+def net_name(item) -> str:
+    """Net name of a pad or zone; "" when it has none (rule areas / keepouts, unconnected pads)."""
+    n = getattr(item, "net", None)
+    return (getattr(n, "name", "") or "") if n is not None else ""
+
+
 def detect_ground_nets(board: Board) -> List[str]:
     names = [n.name for n in board.get_nets()]
     gnd = [n for n in names if GND_NET_RE.match(n)]
     # prefer nets that actually have zones (planes)
-    zone_nets = {z.net.name for z in board.get_zones() if z.net.name}
+    zone_nets = {net_name(z) for z in board.get_zones()} - {""}
     gnd.sort(key=lambda n: (n not in zone_nets, n))
     return gnd
 

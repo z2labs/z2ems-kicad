@@ -150,3 +150,13 @@ def test_components_default_lumped_and_v1_migration():
     assert s.components.default == "lumped" and s.version == 2
     v2 = json.dumps({"version": 2, "components": {"default": "remove", "overrides": {}}})
     assert Setup.from_json(v2).materials() == {"components": False}   # an explicit v2 choice stays
+
+
+def test_ground_nets_with_rule_area_zone():
+    """A rule area (keepout) is a zone without a net: kipy returns net=None (cw_trainer board, 2026-11-05)."""
+    from types import SimpleNamespace as NS
+    from z2ems.ports import detect_ground_nets, net_name
+    board = NS(get_nets=lambda: [NS(name="GND"), NS(name="AGND"), NS(name="RF_N1")],
+               get_zones=lambda: [NS(net=None), NS(net=NS(name="AGND")), NS(net=NS(name=""))])
+    assert detect_ground_nets(board) == ["AGND", "GND"]
+    assert net_name(NS(net=None)) == "" and net_name(NS()) == ""

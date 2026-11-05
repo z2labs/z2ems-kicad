@@ -13,7 +13,9 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
 
-SETUP_VERSION = 2
+from .portdefs import PortDef
+
+SETUP_VERSION = 3
 
 
 @dataclass
@@ -85,7 +87,8 @@ class Setup:
     stackup: StackupSetup = field(default_factory=StackupSetup)
     nets: NetsSetup = field(default_factory=NetsSetup)
     components: ComponentsSetup = field(default_factory=ComponentsSetup)
-    ports: Dict[str, PortExtra] = field(default_factory=dict)    # fp-uuid -> extras
+    ports: Dict[str, PortExtra] = field(default_factory=dict)    # fp-uuid -> extras (Z2EMS_PORT footprints)
+    port_defs: List[PortDef] = field(default_factory=list)        # v3: ports as + pad / - pads or plane
     sim: SimSetup = field(default_factory=SimSetup)
     run: RunSetup = field(default_factory=RunSetup)
     layers: LayerMap = field(default_factory=LayerMap)
@@ -97,7 +100,9 @@ class Setup:
         return {"components": self.components.default == "lumped"}
 
     def to_json(self) -> str:
-        return json.dumps(asdict(self), indent=2, sort_keys=False) + "\n"
+        d = asdict(self)
+        d["port_defs"] = [p.to_dict() for p in self.port_defs]
+        return json.dumps(d, indent=2, sort_keys=False) + "\n"
 
     @classmethod
     def from_json(cls, text: str) -> "Setup":
@@ -114,6 +119,7 @@ class Setup:
             s.components.default = "lumped"      # v1 wrote the old default, never a user choice
         s.version = SETUP_VERSION
         s.ports = {k: PortExtra(**v) for k, v in raw.get("ports", {}).items()}
+        s.port_defs = [PortDef.from_dict(d) for d in raw.get("port_defs", [])]
         s.sim = SimSetup(**raw.get("sim", {}))
         s.run = RunSetup(**raw.get("run", {}))
         s.layers = LayerMap(**raw.get("layers", {}))

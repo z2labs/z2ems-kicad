@@ -10,12 +10,12 @@
     {
       "identifier": "z2ems-open",
       "name": "Z2Labs EMS",
-      "description": "Open the Z2Labs EMS setup for this board",
+      "description": "Ports (+ pad and ground reference), stackup, mesh and simulation of this board",
       "show-button": true,
       "scopes": [
         "pcb"
       ],
-      "entrypoint": "z2ems/plugin_main.py",
+      "entrypoint": "z2ems/main_window.py",
       "icons-light": [
         "icons/z2ems_24.png"
       ],
@@ -42,8 +42,8 @@
     {
       "identifier": "z2ems-simulate",
       "name": "Z2Labs EMS: simulate",
-      "description": "Run the Z2 EMS engine on this board and open the result in the viewer",
-      "show-button": true,
+      "description": "Open the Z2Labs EMS window to define ports and run the simulation",
+      "show-button": false,
       "scopes": [
         "pcb"
       ],

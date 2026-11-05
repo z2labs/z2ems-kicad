@@ -147,7 +147,7 @@ def test_components_default_lumped_and_v1_migration():
     assert Setup().materials() == {"components": True}
     v1 = json.dumps({"version": 1, "components": {"default": "remove", "overrides": {}}})
     s = Setup.from_json(v1)
-    assert s.components.default == "lumped" and s.version == 2
+    assert s.components.default == "lumped" and s.version == 3
     v2 = json.dumps({"version": 2, "components": {"default": "remove", "overrides": {}}})
     assert Setup.from_json(v2).materials() == {"components": False}   # an explicit v2 choice stays
 

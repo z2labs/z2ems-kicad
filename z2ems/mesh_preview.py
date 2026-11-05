@@ -22,7 +22,6 @@ from z2ems.ipc import connect, mm  # noqa: E402
 from z2ems.layers import ROLE_NAMES, ensure_user_layers, resolve_role_layers  # noqa: E402
 from z2ems.model import Setup  # noqa: E402
 from z2ems.overlays import clear_mesh, draw_mesh  # noqa: E402
-from z2ems.ports import detect_ground_nets  # noqa: E402
 from z2ems.simulate import (BIG_RUN_MIN, api, default_threads, fmt_minutes, port_specs,  # noqa: E402
                             run_minutes, server_for)
 from z2ems.ui import notify  # noqa: E402
@@ -107,6 +106,12 @@ def size_text(mesh: dict, n_ports: int, bbox_mm, nx: int, ny: int, threads: int)
     return "\n".join(out)
 
 
+def _pname(spec: dict) -> str:
+    if "plus" in spec:
+        return f"{spec.get('name', 'P')} ({spec['plus']['ref']} pad {spec['plus']['pad']})"
+    return spec.get("ref", "?")
+
+
 def run_gui(clear_only: bool = False) -> int:
     import wx
     app = wx.App(False)
@@ -126,10 +131,10 @@ def run_gui(clear_only: bool = False) -> int:
     if not ensure_engine("The mesh preview needs the Z2 EMS engine."):
         return 1
     cfg = load_config()
-    ground = setup.nets.ground or detect_ground_nets(board)[:1]
-    specs, how = port_specs(board, ground)
+    specs, how = port_specs(board, setup)
     if not specs:
-        notify("Z2Labs EMS - error", "No ports: place Z2EMS_PORT footprints or add an RF connector.", "error", s.sidecar_dir)
+        notify("Z2Labs EMS", "No ports yet: open Z2Labs EMS and add the ports (+ pad and its ground reference) first.",
+               "warn", s.sidecar_dir)
         return 1
     log_lines: list[str] = []
     try:
@@ -137,9 +142,8 @@ def run_gui(clear_only: bool = False) -> int:
         mesh = api(base, "/api/mesh", dict(path=str(s.board_path), ports=specs, fmax=setup.sim.f_stop_hz,
                                            materials=setup.materials()), timeout=300)
     except RuntimeError as e:          # engine said no (e.g. no reference copper under a connector pad)
-        txt = (f"The engine could not build ports for this board:\n{e}\n\nPorts tried ({how}): "
-               + ", ".join(p["ref"] for p in specs)
-               + "\n\nPlace Z2EMS_PORT footprints (SIG on the trace end, REF on ground) where the ports should be.")
+        txt = (f"The engine could not build these ports:\n{e}\n\nPorts ({how}): " + ", ".join(_pname(p) for p in specs)
+               + "\n\nCheck the port's + pad and its - reference in the Z2Labs EMS window.")
         notify("Z2Labs EMS - error", txt, "error", s.sidecar_dir)
         return 1
     except Exception:  # noqa: BLE001
@@ -155,7 +159,7 @@ def run_gui(clear_only: bool = False) -> int:
         return 1
     draw_mesh(board, layer, xs, ys, bbox)
     setup.save(s.sidecar_dir / SETUP_FILENAME)
-    txt = (f"{s.board_path.name}: ports ({how}) " + ", ".join(p["ref"] for p in specs) +
+    txt = (f"{s.board_path.name}: ports ({how}) " + ", ".join(_pname(p) for p in specs) +
            f", fmax {setup.sim.f_stop_hz / 1e9:.2f} GHz\n\n" + quality_text(mesh, len(xs), len(ys)) +
            "\n\n" + size_text(mesh, len(specs), bbox, len(xs), len(ys), default_threads()) +
            f"\n\nLines are a locked group on the mesh layer{' (engine y axis mirrored to KiCad)' if flip else ''}. "

@@ -1,17 +1,8 @@
-"""`z2ems-simulate` action: run the Z2 EMS engine on the open board and show the
-result in the viewer dashboard (DESIGN M2, section 7).
+"""Engine helpers for the Z2Labs EMS window and the overlay actions: the local engine server (start / find),
+the HTTP API, port specs from the user's port definitions, run-size estimate, result summary and the
+comparison with a documented reference. The toolbar "simulate" button opens the Z2Labs EMS window.
 
-Flow
-  1. ports: Z2EMS_PORT footprints on the board; if none, the connector-based
-     suggestions (SMA / u.FL pads) -- never more than 4, user confirms the list.
-  2. engine: a running z2twin server whose folder contains the board, else one is
-     started (twin python, gui/server/z2twin_server.py <board folder>).
-  3. POST /api/run, open the viewer on this board, poll /api/job/<id> with a
-     progress dialog, then show Z0 / eps_eff / |S11| max / |S21| min and, when a
-     reference file exists for this board (presets/refs/<stem>.json), the
-     deviation from the documented engine / closed-form values.
-Results land in <board>_twin/<date-time>/ next to the board, listed under
-"Earlier runs" in the viewer.
+Results land in <board>_twin/<date-time>/ next to the board, listed under "Earlier runs" in the viewer.
 """
 
 from __future__ import annotations
@@ -21,21 +12,16 @@ import os
 import subprocess
 import sys
 import time
-import traceback
 import urllib.error
 import urllib.parse
 import urllib.request
-import webbrowser
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from z2ems import SETUP_FILENAME  # noqa: E402
-from z2ems.config import EngineConfig, load as load_config  # noqa: E402
-from z2ems.ipc import connect  # noqa: E402
-from z2ems.model import Setup  # noqa: E402
-from z2ems.ports import read_ports, suggest_ports, detect_ground_nets  # noqa: E402
-from z2ems.ui import notify  # noqa: E402
+from z2ems.config import EngineConfig  # noqa: E402
+from z2ems.ports import read_ports  # noqa: E402
+
 
 REFS_DIR = Path(__file__).resolve().parent.parent / "presets" / "refs"
 
@@ -118,23 +104,18 @@ def _start_server(cfg: EngineConfig, folder: Path, base: str, log) -> None:
 
 # --- ports --------------------------------------------------------------------
 
-def port_specs(board, ground: list[str]) -> tuple[list[dict], str]:
-    """[{ref, net, pad_no?, z0}] for /api/run, and how they were chosen."""
-    ps = read_ports(board)
+def port_specs(board, setup) -> tuple[list[dict], str]:
+    """Port specs for /api/mesh and /api/run, and where they came from: the ports defined in the Z2Labs EMS
+    window (setup.json port_defs; complete ones only), else Z2EMS_PORT footprints. Never a guess: an empty
+    list means the user has to define ports first."""
+    from z2ems.portdefs import runnable
+    ps = runnable(setup.port_defs)
     if ps:
-        return [dict(ref=p.reference, net=p.sig_net, pad_no="1", z0=p.z0) for p in ps if p.sig_net], "Z2EMS_PORT footprints"
-    sug = [s for s in suggest_ports(board, ground) if s.footprint_ref]
-    # one port per connector (NOT per net: both ends of a through line sit on the same net --
-    # a live run of coupon_msl50 got only J1 and a 1-port sweep)
-    seen, out = set(), []
-    for s in sug:
-        if s.footprint_ref in seen:
-            continue
-        seen.add(s.footprint_ref)
-        out.append(dict(ref=s.footprint_ref, net=s.net, pad_no=s.pad_number, z0=50.0))
-        if len(out) == 4:
-            break
-    return out, "connector suggestions"
+        return [p.to_spec() for p in ps], "Z2Labs EMS ports"
+    fps = read_ports(board)
+    if fps:
+        return [dict(ref=p.reference, net=p.sig_net, pad_no="1", z0=p.z0) for p in fps if p.sig_net], "Z2EMS_PORT footprints"
+    return [], "none"
 
 
 # --- reference comparison ------------------------------------------------------
@@ -183,7 +164,8 @@ def summary(res: dict) -> str:
                        f"(Z0={res['Z0_ohm']:.2f} ohm, eps_eff={res['eeff']:.3f}) does not apply - read the S-parameters.")
         else:
             out.append(f"Line: L={res.get('line_length_mm', 0):.1f} mm  Z0={res['Z0_ohm']:.2f} ohm  eps_eff={res['eeff']:.3f}")
-    sdb = res.get("S_dB", {})
+    sdb = {k: [x for x in v if x is not None] for k, v in res.get("S_dB", {}).items()}
+    sdb = {k: v for k, v in sdb.items() if v}
     fg = res.get("f_GHz", [])
     if "S11" in sdb:
         out.append(f"|S11| max {max(sdb['S11']):.1f} dB over {fg[0]:.2f}-{fg[-1]:.2f} GHz" if fg else f"|S11| max {max(sdb['S11']):.1f} dB")
@@ -235,113 +217,8 @@ def fmt_minutes(m: float) -> str:
 
 # --- GUI -----------------------------------------------------------------------
 
-def run_gui() -> int:
-    import wx
-    app = wx.App(False)
-    from z2ems.engine_install import ensure_engine
-    if not ensure_engine("Simulating needs the Z2 EMS engine."):
-        return 1
-    cfg = load_config()
-    try:
-        s = connect()
-    except Exception as e:  # noqa: BLE001
-        notify("Z2Labs EMS", f"Cannot connect to KiCad: {e}", "error")
-        return 1
-    board_path = s.board_path
-    setup = Setup.load(s.sidecar_dir / SETUP_FILENAME)
-    ground = setup.nets.ground or detect_ground_nets(s.board)[:1]
-    specs, how = port_specs(s.board, ground)
-    if not specs:
-        notify("Z2Labs EMS", "No ports: place Z2EMS_PORT footprints or add an RF connector.", "error", s.sidecar_dir)
-        return 1
-    fmin, fmax = setup.sim.f_start_hz, setup.sim.f_stop_hz
-    txt = "\n".join(f"  P{i+1}: {p['ref']} pad {p.get('pad_no') or '?'}  net {p['net']}  Z0 {p['z0']:g}" for i, p in enumerate(specs))
-    log_lines: list[str] = []
-    def log(m):
-        log_lines.append(m)
-
-    try:
-        base = server_for(cfg, board_path, log)
-    except Exception:  # noqa: BLE001
-        notify("Z2Labs EMS", "Could not start the engine:\n" + traceback.format_exc()[-1500:], "error", s.sidecar_dir)
-        return 1
-    threads = default_threads()
-    size = estimate(base, board_path, specs, fmax, threads, log, setup.materials())
-    auto = os.environ.get("Z2EMS_AUTO") == "1"      # soak harness: no confirmation click
-    if not auto:
-        big = size is not None and size["minutes"] > BIG_RUN_MIN
-        style = wx.YES_NO | wx.STAY_ON_TOP | (wx.NO_DEFAULT | wx.ICON_WARNING if big else wx.ICON_QUESTION)
-        sz = (f"Mesh {size['cells']} = {size['mcells']:.1f} MCells, {len(specs)} excitations: "
-              f"roughly {fmt_minutes(size['minutes'])} on {threads} threads here."
-              + ("\nThis is a long run for this machine - consider fewer ports, a lower fmax, or a GPU box."
-                 if big else "")) if size else "Mesh size unknown (engine could not build it)."
-        if wx.MessageBox(f"Simulate {board_path.name}\n\nPorts ({how}):\n{txt}\n\n{fmin/1e9:.2f}-{fmax/1e9:.2f} GHz, "
-                         f"engine on {base}\n{sz}\n\nRun now?", "Z2Labs EMS - simulate", style) != wx.YES:
-            return 0
-
-    try:
-        job = api(base, "/api/run", dict(path=str(board_path), ports=specs, fmax=fmax, fmin=fmin,
-                                         threads=threads, materials=setup.materials()), timeout=120)
-    except Exception:  # noqa: BLE001
-        notify("Z2Labs EMS", "Could not start the run:\n" + traceback.format_exc()[-1500:], "error", s.sidecar_dir)
-        return 1
-    jid = job.get("id")
-    if os.environ.get("Z2EMS_NO_BROWSER") != "1":      # soak harness: no browser tab per run
-        webbrowser.open(f"{base}/?pcb={urllib.parse.quote(str(board_path))}")
-
-    dlg = wx.ProgressDialog("Z2Labs EMS - simulating", f"job {jid} started\n", maximum=1000,
-                            style=wx.PD_APP_MODAL | wx.PD_CAN_ABORT | wx.PD_ELAPSED_TIME | wx.PD_AUTO_HIDE)
-    # the plugin is a separate process: without STAY_ON_TOP its windows open *behind* the maximized
-    # PCB editor (seen live on Windows 11: progress and result were only visible as taskbar thumbnails)
-    dlg.SetWindowStyleFlag(dlg.GetWindowStyleFlag() | wx.STAY_ON_TOP)
-    dlg.Raise()
-    dlg.SetSize((620, 260))
-    state, res, err = "running", None, None
-    try:
-        while True:
-            time.sleep(1.0)
-            try:
-                j = api(base, f"/api/job/{jid}", timeout=10)
-            except Exception as e:  # noqa: BLE001
-                err = str(e); break
-            state = j.get("state", "?")
-            pr = j.get("progress", {}) or {}
-            tail = (j.get("log") or j.get("log_tail") or [])
-            tail = tail[-3:] if isinstance(tail, list) else str(tail)[-200:]
-            msg = (f"{state}  excitation {pr.get('exc', 0)}/{pr.get('n', '?')}  timestep {pr.get('timestep', 0)}"
-                   f"  energy {pr.get('energy_db', 0):.0f} dB  {pr.get('mcells_s') or ''}\n"
-                   + ("\n".join(tail) if isinstance(tail, list) else tail))
-            cont, _ = dlg.Update(int(1000 * float(pr.get("frac") or 0)), msg)
-            if not cont:
-                try:
-                    api(base, f"/api/job/{jid}/cancel", {}, timeout=10)
-                except Exception:  # noqa: BLE001
-                    pass
-                state = "cancelled"; break
-            if state in ("done", "error", "cancelled", "failed"):
-                res = j.get("result"); err = j.get("error"); break
-    finally:
-        dlg.Destroy()
-
-    if state == "done" and res:
-        setup.run.backend = "local"; setup.run.last_run = jid
-        setup.save(s.sidecar_dir / SETUP_FILENAME)
-        text = summary(res)
-        ref = compare_reference(board_path.stem, res)
-        if ref:
-            text += "\n\n" + "\n".join(ref)
-        text += f"\n\nResults: {board_path.stem}_twin/ (Earlier runs in the viewer)"
-        notify("Z2Labs EMS - result", text, "info", s.sidecar_dir)
-        return 0
-    notify("Z2Labs EMS - error", f"Run ended: {state}\n{err or ''}\n\n" + "\n".join(log_lines[-5:]), "warn", s.sidecar_dir)
-    return 2
-
-
 if __name__ == "__main__":
-    try:
-        sys.exit(run_gui())
-    except Exception:  # noqa: BLE001
-        if os.name == "nt":
-            import ctypes
-            ctypes.windll.user32.MessageBoxW(None, traceback.format_exc()[-3000:], "Z2Labs EMS - error", 0x10)
-        raise
+    # The toolbar "simulate" button opens the Z2Labs EMS window: ports are confirmed there and the run is
+    # followed there (a run started from a bare dialog with guessed ports was the 0.1 behaviour).
+    from z2ems.main_window import main
+    sys.exit(main())

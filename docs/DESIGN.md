@@ -142,7 +142,7 @@ KiCad 9+ provides up to 45 renameable user layers with per-layer colors. The plu
 - The solver renders the requested quantity (|J|, |E|, |H| at frequency f, excitation Pk, layer L) to a PNG in **board coordinates** with known pixel pitch and origin.
 - The plugin places it as a KiCad reference image on `Z2EMS.Field.<tag>`, scaled to board mm, with opacity ≈ 60 %. A small color-bar PNG is placed beside the board outline.
 - Multiple overlays may coexist; the user toggles layers in the Appearance panel.
-- KiCad draws reference images **under all copper**: after placing, the plugin activates the map layer and switches high contrast to *hide others*; hub > Clear overlays restores the normal view.
+- KiCad draws reference images **under all copper**: after placing, the plugin activates the map layer and switches high contrast to *hide others*; Clear overlays in the Z2Labs EMS window restores the normal view.
 - The KiCad overlay is a quick look. Full 3D / animated / cross-section field viewing stays in the WebGPU viewer.
 - Fallback (only if reference images are unavailable via IPC): quantised contour polygons on 8 layers `Z2EMS.J.<band>`, each with its own color.
 

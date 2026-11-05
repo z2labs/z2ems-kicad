@@ -7,19 +7,38 @@ engine, conformal metal edges and a KiCad importer) and brings the results back
 onto the board: S-parameters, line impedance, the FDTD mesh and current-density
 maps as overlays.
 
-Status: **0.1, first public release.** Two-port lines, launches and small RF
-structures are routine; large boards work but the run-time estimate tells you
-when a board is beyond what a laptop CPU can do in reasonable time.
+Status: **0.2.** Two-port lines, launches and small RF structures are routine;
+large boards work but the run-time estimate tells you when a board is beyond
+what a laptop CPU can do in reasonable time.
 
 ## What it does
 
-| Button / action | What happens |
-|---|---|
-| **Z2Labs EMS** (hub) | board report: copper layers, stackup check, suggested RF ports (connector footprints, net names, net classes), ground nets; writes `setup.json` next to the board. Mesh preview, field overlay and *Clear overlays* are in the hub. |
-| **Fab stackup** | pick a manufacturer stackup (JLCPCB 2-layer 1.6 mm, JLC04161H-7628, JLC081611-2116, or your own JSON / imported JLC table) and write it into the board stackup |
-| **Simulate** | starts the engine's local server, runs one excitation per port, shows S-parameters, Z0 and effective permittivity for a two-port line, and opens the 3D viewer |
-| Mesh preview | draws the exact mesh the engine will use on a user layer, with cell count and run-time estimate |
-| Field overlay | current-density maps of the last run as reference images on user layers |
+The **Z2Labs EMS** button opens one window next to the PCB editor (KiCad stays
+usable while it is open):
+
+- **Ports.** A port is a **+** pad on the RF copper and a **-** reference to
+  ground. Select a connector, an IC pin, or a pad and its ground pads in the PCB
+  editor and click *+ Port from selection*: a connector gives its signal pad as +
+  and all its ground pads as -, an IC pin its neighbouring GND pins, a pad with no
+  ground copper next to it the ground plane below (a vertical port). *Set + / Set -
+  here* changes one end, *Show* selects the port's pads in the editor. Connector
+  suggestions are listed but used only when you tick and add them; a port without
+  a reference is shown as incomplete and not simulated.
+- **Markers.** Every port is drawn on the `Z2EMS.Ports` user layer: rings with
+  + and -, arrows from each ground pad to the signal pad (or a down arrow and the
+  reference layer name), and a "P1 50 Ω" label. A user layer has no copper and no
+  nets, so DRC, ERC, the BOM and the fabrication outputs are unaffected.
+- **Board.** Stackup check and *Fab stackup...* (JLCPCB 2-layer 1.6 mm,
+  JLC04161H-7628, JLC081611-2116, your own JSON or an imported JLC table), ground
+  nets.
+- **Simulation.** Frequency range, run-size estimate, *Mesh preview* (the exact
+  engine mesh on a user layer), *Simulate* (one excitation per ticked port),
+  *Field overlay* (current-density maps on user layers), *3D viewer*, *Clear
+  overlays*. A run goes to the local engine server and continues in the
+  background: the window shows its progress, opens the result and the 3D viewer
+  when it is done, and picks the run up again when it is reopened.
+
+Ports are saved in `<board>.z2ems/setup.json` next to the board.
 
 Two-pad R, L and C footprints become lumped elements in the model (value from the
 footprint), so matching networks and series parts are simulated as placed.
@@ -39,7 +58,7 @@ footprint), so matching networks and series parts are simulated as placed.
 Plugins → Z2Labs EMS → Install*, then restart the PCB editor. KiCad creates the
 plugin's Python environment itself.
 
-**The engine:** the first time *Simulate* or *Mesh preview* needs it, or from the hub's
+**The engine:** the first time *Simulate* or *Mesh preview* needs it, or from the window's
 *Engine...* button, the plugin shows what it would download (the latest
 `Z2EMS_engine_*_win64.zip` from the [z2ems releases](https://github.com/z2labs/z2ems/releases),
 its size and the target folder) and installs it only after you click *Download*. The file
@@ -86,7 +105,8 @@ engine server, default `http://127.0.0.1:8765`).
 1. Open `examples/coupon_msl50.kicad_pcb` from the engine folder (a 40 mm 50 Ω
    microstrip with two SMA pads) in the PCB editor.
 2. **Fab stackup** → JLC04161H-7628 → Apply.
-3. **Z2Labs EMS** → check that J1 and J2 are the suggested ports → *Mesh preview*.
+3. **Z2Labs EMS** → tick J1 and J2 under *Suggestions* → *Add ticked* (or select
+   J1 in the editor → *+ Port from selection*, same for J2) → *Mesh preview*.
 4. **Simulate**. On a 4-core laptop the run takes about 5 minutes and should
    report Z0 ≈ 49.5 Ω and εeff ≈ 3.35 (`presets/refs/coupon_msl50.json`).
 5. *Field overlay* shows where the current flows; *Clear overlays* removes

@@ -102,16 +102,6 @@
       "icons-dark": [
         "icons/z2ems_24_dark.png"
       ]
-    },
-    {
-      "identifier": "z2ems-spike0",
-      "name": "Z2Labs EMS: API capability check",
-      "description": "Run the Spike 0 IPC capability check against the open board (non-destructive, all changes are dropped)",
-      "show-button": false,
-      "scopes": [
-        "pcb"
-      ],
-      "entrypoint": "spike0/spike0_capabilities.py"
     }
   ]
 }

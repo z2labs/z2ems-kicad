@@ -115,16 +115,23 @@ def looks_like_engine(root: Path) -> bool:
     return (root / "gui" / "server" / "z2twin_server.py").exists() and (root / "twin" / "kicad_sim.py").exists()
 
 
-def _safe_extract(zf: zipfile.ZipFile, target: Path) -> None:
+def _safe_extract(zf: zipfile.ZipFile, target: Path, unpack_progress=None) -> None:
+    """Extract after checking every member stays inside target. unpack_progress(i, n) is called every
+    few files (the engine is ~5000 files; on Windows with a virus scanner that takes minutes)."""
     base = target.resolve()
-    for m in zf.infolist():
+    members = zf.infolist()
+    for m in members:
         p = (target / m.filename).resolve()
         if p != base and base not in p.parents:
             raise InstallError(f"unsafe path in archive: {m.filename}")
-    zf.extractall(target)
+    n = len(members)
+    for i, m in enumerate(members):
+        zf.extract(m, target)
+        if unpack_progress and (i % 25 == 0 or i == n - 1):
+            unpack_progress(i + 1, n)
 
 
-def install_zip(zip_path: Path, root: Path, info: dict | None = None) -> Path:
+def install_zip(zip_path: Path, root: Path, info: dict | None = None, unpack_progress=None) -> Path:
     """Extract an engine package zip into root (replacing a previous install). The zip holds one top
     folder (Z2EMS/) or the package files directly."""
     root = Path(root)
@@ -134,7 +141,7 @@ def install_zip(zip_path: Path, root: Path, info: dict | None = None) -> Path:
         if p.exists():
             shutil.rmtree(p)
     with zipfile.ZipFile(zip_path) as zf:
-        _safe_extract(zf, stage)
+        _safe_extract(zf, stage, unpack_progress)
     pkg = stage
     if not looks_like_engine(pkg):
         subs = [d for d in stage.iterdir() if d.is_dir()]
@@ -200,11 +207,13 @@ def plan(opener: Opener = urlopen, platform: str = sys.platform) -> dict:
                 url=asset["browser_download_url"], size=int(asset.get("size") or 0), sha256=sha)
 
 
-def download_and_install(p: dict, root: Path | None = None, progress=None, opener: Opener = urlopen) -> Path:
+def download_and_install(p: dict, root: Path | None = None, progress=None, opener: Opener = urlopen,
+                         unpack_progress=None) -> Path:
     root = Path(root) if root else install_root()
     dl = root.parent / "download" / p["asset"]
     download(p["url"], dl, p["sha256"], p.get("size", 0), progress, opener)
-    out = install_zip(dl, root, dict(tag=p["tag"], asset=p["asset"], sha256=p["sha256"], source=p["url"]))
+    out = install_zip(dl, root, dict(tag=p["tag"], asset=p["asset"], sha256=p["sha256"], source=p["url"]),
+                      unpack_progress)
     try:
         dl.unlink()
     except OSError:
@@ -291,7 +300,8 @@ def setup_dialog(missing: bool = False, reason: str = "") -> bool:
     if r != wx.ID_YES:
         return False
     pd = wx.ProgressDialog("Z2Labs EMS - engine", f"Downloading {p['asset']}...", maximum=1000, parent=_owner(),
-                           style=wx.PD_CAN_ABORT | wx.PD_APP_MODAL | wx.PD_ELAPSED_TIME | wx.PD_REMAINING_TIME)
+                           style=wx.PD_CAN_ABORT | wx.PD_APP_MODAL | wx.PD_AUTO_HIDE | wx.PD_ELAPSED_TIME | wx.PD_REMAINING_TIME)
+    pd.CentreOnScreen()
 
     def prog(done: int, total: int) -> bool:
         frac = done / total if total else 0.0
@@ -299,8 +309,12 @@ def setup_dialog(missing: bool = False, reason: str = "") -> bool:
         wx.YieldIfNeeded()
         return cont
 
+    def unpack(i: int, n: int) -> None:
+        pd.Update(950 + int(49 * i / max(n, 1)), f"Unpacking the engine: {i} / {n} files")
+        wx.YieldIfNeeded()
+
     try:
-        download_and_install(p, root, progress=prog)
+        download_and_install(p, root, progress=prog, unpack_progress=unpack)
         pd.Update(1000, "Installed.")
     except Exception as e:  # noqa: BLE001
         pd.Destroy()

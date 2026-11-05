@@ -120,7 +120,7 @@ z2ems/               plugin package (ipc, model, stackup, ports, mesh preview, s
 library/             z2ems symbol + Z2EMS_PORT footprint
 presets/stackups/    fab stackup presets (JSON)
 presets/refs/        reference results used by the result dialog
-spike0/              KiCad API capability check (run it if something does not work on your KiCad version)
+spike0/              KiCad API capability check for developers (run from a source checkout; not in the PCM package)
 tests/               pytest, no KiCad needed
 tools/               installers, PCM package builder (build_pcm.py), headless KiCad helper
 pcm/                 PCM metadata template and 64x64 icon

@@ -175,6 +175,23 @@ def net_name(item) -> str:
     return (getattr(n, "name", "") or "") if n is not None else ""
 
 
+def cu_layer_name(board, layer) -> str:
+    """Canonical copper layer name ('F.Cu', 'In1.Cu', 'B.Cu') also when the layer has a user name
+    ('In1_GND', 'Top'): the engine and the .kicad_pcb file use the canonical names. Other layers: the
+    name KiCad shows."""
+    try:
+        n = BoardLayer.Name(int(layer))
+    except Exception:  # noqa: BLE001
+        n = ""
+    m = re.match(r"BL_(F|B|In\d+)_Cu$", n)
+    if m:
+        return f"{m.group(1)}.Cu"
+    try:
+        return board.get_layer_name(layer)
+    except Exception:  # noqa: BLE001
+        return n
+
+
 def detect_ground_nets(board: Board) -> List[str]:
     names = [n.name for n in board.get_nets()]
     gnd = [n for n in names if GND_NET_RE.match(n)]
@@ -199,6 +216,6 @@ def _fp_lib_name(fp: FootprintInstance) -> str:
 def _pad_layer(board: Board, pad: Pad) -> str:
     try:
         layers = list(pad.padstack.layers)
-        return board.get_layer_name(layers[0]) if layers else ""
+        return cu_layer_name(board, layers[0]) if layers else ""
     except Exception:
         return ""

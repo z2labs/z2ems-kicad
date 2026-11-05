@@ -30,7 +30,7 @@ REPO_URL = "https://github.com/z2labs/z2ems-kicad"
 
 # what goes into plugins/ (relative to the repository root)
 PLUGIN_FILES = ["plugin.json", "requirements.txt", "LICENSE", "README.md"]
-PLUGIN_DIRS = ["z2ems", "icons", "presets", "library", "spike0", "docs"]
+PLUGIN_DIRS = ["z2ems", "icons", "presets", "library", "docs"]   # spike0/ is a developer check, not shipped
 SKIP = re.compile(r"(__pycache__|\.pyc$|\.pytest_cache|/user/.+)")
 
 

@@ -83,8 +83,11 @@ def test_download_and_install(tmp_path: Path, top):
     root = tmp_path / "Z2EMS" / "engine"
     seen = []
     p = ei.plan(opener=opener, platform="win32")
-    out = ei.download_and_install(p, root, progress=lambda d, t: seen.append((d, t)) or True, opener=opener)
+    unpacked = []
+    out = ei.download_and_install(p, root, progress=lambda d, t: seen.append((d, t)) or True, opener=opener,
+                                  unpack_progress=lambda i, n: unpacked.append((i, n)))
     assert out == root and ei.looks_like_engine(root)
+    assert unpacked and unpacked[-1][0] == unpacked[-1][1]
     assert (root / "python" / "python.exe").exists()
     assert ei.installed_release(root)["tag"] == "v0.1.0"
     assert seen and seen[-1][0] == seen[-1][1]

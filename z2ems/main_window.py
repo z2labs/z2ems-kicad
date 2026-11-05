@@ -186,10 +186,10 @@ class MainWindow(wx.Frame):
 
         root.Add(wx.StaticLine(p), 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 12)
         foot = wx.BoxSizer(wx.HORIZONTAL)
-        cfg = load_config()
-        eng = wx.StaticText(p, label=f"Engine: {cfg.fork_root}   ·   plugin {__version__}")
-        eng.SetForegroundColour(GREY)
-        foot.Add(eng, 1, wx.ALIGN_CENTER_VERTICAL)
+        self.eng_lbl = wx.StaticText(p, label="")
+        self.eng_lbl.SetForegroundColour(GREY)
+        self.refresh_engine_label()
+        foot.Add(self.eng_lbl, 1, wx.ALIGN_CENTER_VERTICAL)
         b = wx.Button(p, label="Engine...")
         b.Bind(wx.EVT_BUTTON, lambda e: spawn("engine_setup.py"))
         foot.Add(b, 0)
@@ -374,13 +374,25 @@ class MainWindow(wx.Frame):
         self.say(f"{added} port{'s' if added != 1 else ''} added." if added else "Tick a suggestion first.", warn=not added)
 
     # --- engine ------------------------------------------------------------------------------------
+    def refresh_engine_label(self):
+        from z2ems.engine_install import installed_release
+        cfg = load_config()
+        if cfg.problems():
+            txt = "Engine: not installed (downloaded when you first simulate, or with Engine...)"
+        else:
+            rel = installed_release(cfg.fork_root)
+            txt = f"Engine: {cfg.fork_root}" + (f"  ({rel.get('tag')})" if rel else "")
+        self.eng_lbl.SetLabel(f"{txt}   ·   plugin {__version__}")
+
     def engine(self) -> Optional[str]:
         from z2ems.engine_install import ensure_engine
         from z2ems.simulate import server_for
-        if not ensure_engine("Simulating needs the Z2 EMS engine."):
+        ok = ensure_engine("Simulating needs the Z2 EMS engine.")
+        self.refresh_engine_label()
+        if not ok:
             return None
         if self.base is None:
-            self.say("Starting the engine...")
+            self.say("Starting the engine... (the first start after an install can take a minute or two while Windows scans the new files)")
             wx.Yield()
             base = server_for(load_config(), self.s.board_path, lambda m: None)
             from z2ems.simulate import api
@@ -481,8 +493,9 @@ class MainWindow(wx.Frame):
         pr = j.get("progress", {}) or {}
         self.gauge.SetValue(int(1000 * float(pr.get("frac") or 0)))
         if st in ("queued", "running"):
+            speed = pr.get("mcells_s")
             self.say(f"{st}: excitation {pr.get('exc', 0)}/{pr.get('n', '?')},  timestep {pr.get('timestep', 0)},  "
-                     f"energy {pr.get('energy_db', 0):.0f} dB  {pr.get('mcells_s') or ''}")
+                     f"energy {pr.get('energy_db', 0):.0f} dB" + (f",  {float(speed):.1f} MCells/s" if speed else ""))
             return
         self.timer.Stop()
         self.job = None

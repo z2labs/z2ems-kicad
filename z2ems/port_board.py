@@ -13,7 +13,7 @@ import math
 from typing import Iterable, Optional, Sequence, Tuple
 
 from .portdefs import PortDef, Terminal
-from .ports import GND_NET_RE, net_name
+from .ports import GND_NET_RE, cu_layer_name, net_name
 
 MARKER_GROUP_PREFIX = "Z2EMS port "
 
@@ -27,7 +27,7 @@ def _ref(fp) -> str:
 def pad_layer_name(board, pad) -> str:
     try:
         layers = list(pad.padstack.layers)
-        names = [board.get_layer_name(l) for l in layers]
+        names = [cu_layer_name(board, l) for l in layers]
         cu = [n for n in names if n.endswith(".Cu")]
         if "F.Cu" in cu:
             return "F.Cu"
@@ -63,7 +63,7 @@ def footprint_of(board, item):
 def plane_below(board, layer: str, ground_nets: Sequence[str] = ()) -> Optional[str]:
     """The nearest copper layer on the other side of the dielectric from `layer` that carries a ground zone."""
     try:
-        cu = sorted({board.get_layer_name(l) for l in board.get_enabled_layers()} , key=_cu_order)
+        cu = sorted({cu_layer_name(board, l) for l in board.get_enabled_layers()}, key=_cu_order)
         cu = [c for c in cu if c.endswith(".Cu")]
     except Exception:
         cu = []
@@ -72,7 +72,7 @@ def plane_below(board, layer: str, ground_nets: Sequence[str] = ()) -> Optional[
         for z in board.get_zones():
             n = net_name(z)
             if is_ground(n, ground_nets):
-                zones += [board.get_layer_name(l) for l in getattr(z, "layers", [])]
+                zones += [cu_layer_name(board, l) for l in getattr(z, "layers", [])]
     except Exception:
         pass
     if not cu:
@@ -249,7 +249,8 @@ def marker_geometry(port: PortDef, plus_xy: Tuple[float, float], minus_xy: Seque
         segs += [((x, y - r), (x, y + r)), ((x, y + r), (x - r * 0.4, y + r * 0.45)), ((x, y + r), (x + r * 0.4, y + r * 0.45)),
                  ((x - r * 0.5, y + r * 1.15), (x + r * 0.5, y + r * 1.15))]
         texts.append((x + r * 0.6, y + r * 2.0, port.minus_plane, r * 0.8))
-    texts.append((plus_xy[0] + r * 1.6, plus_xy[1] - r * 2.2, f"{port.name} {port.z0:g} Ω", r * 1.3))
+    # above the usual reference-designator spot (~1.5 mm over the pad), so "P1 50 Ω" does not sit on "J1"
+    texts.append((plus_xy[0] + r * 1.6, plus_xy[1] - r * 4.2, f"{port.name} {port.z0:g} Ω", r * 1.3))
     return dict(circles=circles, segments=segs, texts=texts)
 
 

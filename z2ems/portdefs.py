@@ -23,9 +23,10 @@ class Terminal:
     pad: str
     net: str = ""
     layer: str = ""
+    count: int = 1          # pads of this footprint with this number on this layer (shield pads often all "2")
 
     def label(self) -> str:
-        return f"{self.ref} pad {self.pad}"
+        return f"{self.ref} pad {self.pad}" + (f" (x{self.count})" if self.count > 1 else "")
 
 
 @dataclass
@@ -82,10 +83,13 @@ class PortDef:
     def minus_text(self) -> str:
         if self.minus_pads:
             refs: Dict[str, List[str]] = {}
+            many: Dict[str, int] = {}
             for m in self.minus_pads:
                 refs.setdefault(m.ref, []).append(m.pad)
+                many[m.ref] = many.get(m.ref, 0) + max(1, m.count)
             nets = sorted({m.net for m in self.minus_pads if m.net})
-            pads = ";  ".join(f"{r} pad{'s' if len(p) > 1 else ''} {', '.join(_compact(p))}" for r, p in refs.items())
+            pads = ";  ".join(f"{r} pad{'s' if len(set(p)) > 1 else ''} {', '.join(_compact(p))}"
+                              + (f" ({many[r]} pads)" if many[r] > len(p) else "") for r, p in refs.items())
             return pads + (f"  ·  {', '.join(nets)}" if nets else "")
         if self.minus_plane:
             return f"plane below: {self.minus_plane}"

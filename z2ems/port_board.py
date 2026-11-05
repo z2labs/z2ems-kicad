@@ -41,7 +41,13 @@ def is_ground(net: str, ground_nets: Sequence[str] = ()) -> bool:
 
 
 def terminal(board, fp, pad) -> Terminal:
-    return Terminal(ref=_ref(fp), pad=str(pad.number), net=net_name(pad), layer=pad_layer_name(board, pad))
+    layer = pad_layer_name(board, pad)
+    try:
+        same = sum(1 for q in fp.definition.pads
+                   if str(q.number) == str(pad.number) and pad_layer_name(board, q) == layer)
+    except Exception:  # noqa: BLE001
+        same = 1
+    return Terminal(ref=_ref(fp), pad=str(pad.number), net=net_name(pad), layer=layer, count=max(1, same))
 
 
 def footprint_of(board, item):
@@ -152,6 +158,15 @@ def port_from_selection(board, n: int, ground_nets: Sequence[str] = ()) -> Tuple
         return None, "Select a footprint or pads (tracks are not port terminals yet)."
     sig = [p for p in pads if not is_ground(net_name(p), ground_nets)]
     gnd = [p for p in pads if is_ground(net_name(p), ground_nets)]
+    if not sig and gnd:
+        # only ground pads selected - usually a click on a connector's shield pad: take the whole footprint
+        owners = {_ref(f): f for f in (footprint_of(board, g) for g in gnd) if f is not None}
+        if len(owners) == 1:
+            fp = next(iter(owners.values()))
+            p = port_for_footprint(board, fp, n, ground_nets)
+            if p.plus is None:
+                return p, f"{_ref(fp)} has more than one signal pad: select the pad for +."
+            return p, f"{p.name} from {_ref(fp)}: + {p.plus_text()},  - {p.minus_text()}"
     if len(sig) != 1:
         return None, "Select exactly one signal pad for + (plus any ground pads for -)."
     fp = footprint_of(board, sig[0])

@@ -491,7 +491,14 @@ class MainWindow(wx.Frame):
             return
         st = j.get("state", "?")
         pr = j.get("progress", {}) or {}
-        self.gauge.SetValue(int(1000 * float(pr.get("frac") or 0)))
+        frac = float(pr.get("frac") or 0)          # of the current excitation
+        try:
+            exc, n = int(pr.get("exc") or 0), int(pr.get("n") or 0)
+            if n > 0 and exc >= 1:
+                frac = (exc - 1 + frac) / n
+        except (TypeError, ValueError):
+            pass
+        self.gauge.SetValue(int(1000 * min(max(frac, 0.0), 1.0)))
         if st in ("queued", "running"):
             speed = pr.get("mcells_s")
             self.say(f"{st}: excitation {pr.get('exc', 0)}/{pr.get('n', '?')},  timestep {pr.get('timestep', 0)},  "

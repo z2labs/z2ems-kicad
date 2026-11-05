@@ -106,3 +106,10 @@ def test_port_without_ground_pads_gets_plane_below():
     a = fp("ANT1", [pad("1", "RF", 10, 6, "a")], "a")
     p, msg = pb.port_from_selection(Board([a], [a]), 2)
     assert p.kind == "vertical" and p.minus_plane == "In1.Cu" and p.complete, msg
+
+
+def test_shield_pads_sharing_one_number_are_counted():
+    p = PortDef(1, plus=Terminal("J1A", "1", "RF1", "F.Cu"), minus_pads=[Terminal("J1A", "2", "GND", "F.Cu", count=4)])
+    assert "4 pads" in p.minus_text()
+    assert p.to_spec()["minus"] == {"pads": [{"ref": "J1A", "pad": "2"}]}      # the engine takes every pad "2"
+    assert PortDef.from_dict(p.to_dict()).minus_pads[0].count == 4

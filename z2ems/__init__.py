@@ -3,7 +3,7 @@
 Pre-processor for the Z2 EMS solver (z2labs/z2ems). See docs/DESIGN.md.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 # Field names carried by the Z2EMS_PORT footprint / symbol (board truth for ports).
 FIELD_PREFIX = "Z2EMS."

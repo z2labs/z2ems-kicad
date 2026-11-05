@@ -122,11 +122,10 @@ def run_gui(clear_only: bool = False) -> int:
         if os.environ.get("Z2EMS_AUTO") != "1":     # harness: a modal box here blocked the soak (TimeoutExpired)
             notify("Z2Labs EMS - mesh", f"Removed {n} mesh lines.", "info", s.sidecar_dir)
         return 0
-    cfg = load_config()
-    probs = cfg.problems()
-    if probs:
-        notify("Z2Labs EMS - error", "Z2 EMS engine not configured on this machine:\n" + "\n".join(probs), "error", s.sidecar_dir)
+    from z2ems.engine_install import ensure_engine
+    if not ensure_engine("The mesh preview needs the Z2 EMS engine."):
         return 1
+    cfg = load_config()
     ground = setup.nets.ground or detect_ground_nets(board)[:1]
     specs, how = port_specs(board, ground)
     if not specs:

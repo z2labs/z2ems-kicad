@@ -3,4 +3,4 @@ __pycache__/
 .pytest_cache/
 spike0/spike0_report.json
 *.z2ems/results/
-presets/stackups/user/*.json
+dist/

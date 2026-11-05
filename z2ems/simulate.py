@@ -238,12 +238,10 @@ def fmt_minutes(m: float) -> str:
 def run_gui() -> int:
     import wx
     app = wx.App(False)
-    cfg = load_config()
-    probs = cfg.problems()
-    if probs:
-        notify("Z2Labs EMS", "Z2 EMS engine not configured on this machine:\n" + "\n".join(probs) +
-               "\n\nSet Z2EMS_TWIN_PY / Z2EMS_FORK_ROOT or write ~/.z2ems.json", "error")
+    from z2ems.engine_install import ensure_engine
+    if not ensure_engine("Simulating needs the Z2 EMS engine."):
         return 1
+    cfg = load_config()
     try:
         s = connect()
     except Exception as e:  # noqa: BLE001

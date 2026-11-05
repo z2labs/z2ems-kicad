@@ -1,5 +1,5 @@
 {
-  "identifier": "com.z2labs.kicad-z2ems",
+  "identifier": "com.github.z2labs.z2ems",
   "name": "Z2Labs EMS",
   "description": "EM simulation pre-processor for KiCad boards, using the Z2 EMS engine (an openEMS fork with a CUDA engine). Ports, ground, stackup presets, mesh preview, simulation, field overlays.",
   "runtime": {
@@ -85,6 +85,22 @@
       ],
       "icons-dark": [
         "icons/z2ems_fields_24.png"
+      ]
+    },
+    {
+      "identifier": "z2ems-engine",
+      "name": "Z2Labs EMS: engine",
+      "description": "Install, update or locate the Z2 EMS engine (download from github.com/z2labs/z2ems)",
+      "show-button": false,
+      "scopes": [
+        "pcb"
+      ],
+      "entrypoint": "z2ems/engine_setup.py",
+      "icons-light": [
+        "icons/z2ems_24.png"
+      ],
+      "icons-dark": [
+        "icons/z2ems_24.png"
       ]
     },
     {

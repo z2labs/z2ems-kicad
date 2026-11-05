@@ -160,7 +160,7 @@ def run_as_plugin() -> int:
 # (on a 1366 px wide screen open/stackup/simulate were invisible with five buttons).
 HUB_ACTIONS = (("&Fab stackup...", "stackup_picker.py"), ("&Mesh preview", "mesh_preview.py"),
                ("&Simulate...", "simulate.py"), ("F&ield overlay", "field_overlay.py"),
-               ("Clear &overlays", "clear_overlays.py"))
+               ("Clear &overlays", "clear_overlays.py"), ("&Engine...", "engine_setup.py"))
 
 
 def hub(summary: str, report_path) -> bool:

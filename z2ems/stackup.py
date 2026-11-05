@@ -19,7 +19,9 @@ from kipy.proto.board import board_commands_pb2, board_pb2
 from .ipc import mm, nm
 
 PRESET_DIR = Path(__file__).resolve().parent.parent / "presets" / "stackups"
-USER_PRESET_DIR = PRESET_DIR / "user"          # imported / hand-made presets, git-ignored
+# imported / hand-made presets live outside the plugin folder, so a plugin update (PCM) keeps them
+USER_PRESET_DIR = Path.home() / ".z2ems" / "stackups"
+LEGACY_USER_PRESET_DIR = PRESET_DIR / "user"    # before 0.1.0 (read only)
 
 
 @dataclass
@@ -115,8 +117,8 @@ def validate(rep: StackupReport) -> List[str]:
 
 def list_presets() -> List[dict]:
     out = []
-    for d in (PRESET_DIR, USER_PRESET_DIR):
-        for p in sorted(d.glob("*.json")):
+    for d in (PRESET_DIR, LEGACY_USER_PRESET_DIR, USER_PRESET_DIR):
+        for p in sorted(d.glob("*.json")) if d.is_dir() else ():
             try:
                 pr = json.loads(p.read_text(encoding="utf-8"))
             except json.JSONDecodeError:

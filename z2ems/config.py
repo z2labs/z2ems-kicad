@@ -64,7 +64,11 @@ def _package_python(root: Path) -> Path:
     return Path(sys.executable)
 
 
-def _default_roots() -> list[Path]:
+CONFIG_FILE = Path.home() / ".z2ems.json"
+
+
+def default_roots() -> list[Path]:
+    """Where an engine package is looked for; the first one is where the plugin installs it."""
     home = Path.home()
     if os.name == "nt":
         local = Path(os.environ.get("LOCALAPPDATA", home / "AppData" / "Local"))
@@ -73,17 +77,18 @@ def _default_roots() -> list[Path]:
 
 
 def _defaults() -> tuple[Path, Path]:
-    for root in _default_roots():
-        if (root / "gui" / "server" / "z2twin_server.py").exists():
-            return _package_python(root), root
-    root = _default_roots()[0]
+    for base in default_roots():
+        for root in (base, base / "Z2EMS"):          # the release zip has a Z2EMS/ top folder
+            if (root / "gui" / "server" / "z2twin_server.py").exists():
+                return _package_python(root), root
+    root = default_roots()[0]
     return _package_python(root), root
 
 
 def load() -> EngineConfig:
     twin_py, fork_root = _defaults()
     exe = None
-    cfg_file = Path.home() / ".z2ems.json"
+    cfg_file = CONFIG_FILE
     if cfg_file.exists():
         try:
             j = json.loads(cfg_file.read_text(encoding="utf-8"))

@@ -27,27 +27,41 @@ footprint), so matching networks and series parts are simulated as placed.
 ## Requirements
 
 - KiCad **10** with *Preferences → Plugins → Enable IPC API server* ticked.
-- The **Z2 EMS engine**: a release package from
-  [z2labs/z2ems](https://github.com/z2labs/z2ems/releases) (Windows: unzip, nothing
-  to install) or a source build. An NVIDIA GPU is optional; with one, the CUDA
-  engine is used when you choose the `cuda` or `auto` variant.
+- The **Z2 EMS engine** (~160 MB, separate from the plugin). On Windows the plugin
+  offers to download and install it the first time an action needs it (see below);
+  on Linux and macOS it is built from source ([z2labs/z2ems](https://github.com/z2labs/z2ems#install)).
+  An NVIDIA GPU is optional; with one, the CUDA engine is used when you choose the
+  `cuda` or `auto` variant.
 
 ## Install
 
-Windows (PowerShell, KiCad closed):
+**From KiCad (Plugin and Content Manager):** *Tools → Plugin and Content Manager →
+Plugins → Z2Labs EMS → Install*, then restart the PCB editor. KiCad creates the
+plugin's Python environment itself.
 
-    powershell -ExecutionPolicy Bypass -File tools\install-windows.ps1
+**The engine:** the first time *Simulate* or *Mesh preview* needs it, or from the hub's
+*Engine...* button, the plugin shows what it would download (the latest
+`Z2EMS_engine_*_win64.zip` from the [z2ems releases](https://github.com/z2labs/z2ems/releases),
+its size and the target folder) and installs it only after you click *Download*. The file
+is checked against the SHA-256 that GitHub publishes for it and unpacked to
+`%LOCALAPPDATA%\Z2EMS\engine`; nothing else on the computer is changed. *Choose folder...*
+points the plugin to an engine you already have (a source build on Linux/macOS, or a
+zip you unpacked yourself). *Engine...* also updates the engine to a newer release.
 
-Linux / macOS:
+**From this repository (development):**
 
-    tools/install-linux.sh        # or tools/install-macos.sh
+    powershell -ExecutionPolicy Bypass -File tools\install-windows.ps1     # Windows, KiCad closed
+    tools/install-linux.sh                                                # or tools/install-macos.sh
 
-The installers link the repository into KiCad's plugin folder, enable the API
-server, add the `z2ems` symbol and footprint library (`Z2EMS_PORT`, an explicit
-port footprint for places without a connector) and run the unit tests. Manual
-install: copy or link this folder to `Documents\KiCad\10.0\plugins\kicad-z2ems`
-(Windows) or `~/.local/share/kicad/10.0/plugins/kicad-z2ems` (Linux) and restart
-KiCad; KiCad creates the plugin's Python environment from `requirements.txt`.
+The scripts link the repository into KiCad's plugin folder, enable the API server, add
+the `z2ems` symbol and footprint library (`Z2EMS_PORT`, an explicit port footprint for
+places without a connector) and run the unit tests. With the PCM install the library
+files are in the plugin folder (`library/`); add them to the symbol and footprint
+library tables by hand if you want the port footprint. `tools/build_pcm.py` builds the
+PCM package.
+
+Your own stackup presets (imported JLC tables, hand-made JSON) are kept in
+`~/.z2ems/stackups`, outside the plugin folder, so an update does not remove them.
 
 ### Telling the plugin where the engine is
 
@@ -62,14 +76,14 @@ or `~/.z2ems.json`:
 { "engine": "D:/tools/z2ems-engine" }
 ```
 
-Other keys / variables: `twin_py` / `Z2EMS_TWIN_PY` (Python with the CSXCAD and
+(*Choose folder...* in the engine dialog writes this file.) Other keys / variables: `twin_py` / `Z2EMS_TWIN_PY` (Python with the CSXCAD and
 openEMS bindings), `fork_root` / `Z2EMS_FORK_ROOT` (a z2ems source checkout),
 `openems_exe` / `Z2EMS_OPENEMS` (engine executable), `Z2EMS_SERVER` (a running
 engine server, default `http://127.0.0.1:8765`).
 
 ## Quick start
 
-1. Open `examples/coupon_msl50.kicad_pcb` from the engine package (a 40 mm 50 Ω
+1. Open `examples/coupon_msl50.kicad_pcb` from the engine folder (a 40 mm 50 Ω
    microstrip with two SMA pads) in the PCB editor.
 2. **Fab stackup** → JLC04161H-7628 → Apply.
 3. **Z2Labs EMS** → check that J1 and J2 are the suggested ports → *Mesh preview*.
@@ -88,7 +102,8 @@ presets/stackups/    fab stackup presets (JSON)
 presets/refs/        reference results used by the result dialog
 spike0/              KiCad API capability check (run it if something does not work on your KiCad version)
 tests/               pytest, no KiCad needed
-tools/               installers, headless KiCad helper for CI
+tools/               installers, PCM package builder (build_pcm.py), headless KiCad helper
+pcm/                 PCM metadata template and 64x64 icon
 docs/DESIGN.md       design notes: data model, port and ground rules, overlays, roadmap
 ```
 

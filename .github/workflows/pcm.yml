@@ -1,0 +1,78 @@
+name: PCM package
+
+# Tests, then the KiCad Plugin and Content Manager package. A v* tag publishes it as a GitHub release
+# (zip + the metadata.json and icon.png for gitlab.com/kicad/addons/metadata/packages/<identifier>/).
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Unit tests
+        run: |
+          pip install -r requirements.txt pytest
+          pytest -q tests
+
+      - name: Check the tag against the package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          v=$(python -c "import re;print(re.search(r'__version__\s*=\s*\"([^\"]+)\"', open('z2ems/__init__.py').read()).group(1))")
+          [ "v$v" = "${GITHUB_REF_NAME}" ] || { echo "tag ${GITHUB_REF_NAME} != package version $v"; exit 1; }
+
+      - name: Build the PCM package
+        id: pcm
+        run: |
+          python tools/build_pcm.py --out dist | tee dist.json
+          echo "zip=$(python -c "import json;print(json.load(open('dist.json'))['zip'])")" >> "$GITHUB_OUTPUT"
+
+      - name: Validate metadata.json against the KiCad PCM schema
+        run: |
+          pip install jsonschema
+          curl -fsSL https://go.kicad.org/pcm/schemas/v1 -o schema.json
+          python - <<'PY'
+          import json, jsonschema
+          s = json.load(open('schema.json'))
+          for f in ('dist/metadata.json',):
+              errs = list(jsonschema.validators.validator_for(s)(s).iter_errors(json.load(open(f))))
+              for e in errs:
+                  print(f, list(e.path), e.message)
+              assert not errs, f
+          print('metadata.json valid')
+          PY
+          cat dist/metadata.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: z2ems-kicad-pcm
+          path: dist/
+
+      - name: GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Z2Labs EMS ${{ github.ref_name }}
+          files: |
+            ${{ steps.pcm.outputs.zip }}
+            dist/metadata.json
+            dist/icon.png
+          body: |
+            Z2Labs EMS ${{ github.ref_name }} for KiCad 10 (IPC API plugin).
+
+            - Install from KiCad: *Plugin and Content Manager → Plugins → Z2Labs EMS*, or install this zip with *Install from File...*.
+            - The solver is a separate download: on Windows the plugin offers to install the latest [Z2 EMS engine](https://github.com/z2labs/z2ems/releases) on first use; on Linux and macOS build the engine from source.
+            - `metadata.json` and `icon.png` are the files for the KiCad addon repository.

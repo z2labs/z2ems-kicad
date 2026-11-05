@@ -1,0 +1,101 @@
+{
+  "identifier": "com.z2labs.kicad-z2ems",
+  "name": "Z2Labs EMS",
+  "description": "EM simulation pre-processor for KiCad boards, using the Z2 EMS engine (an openEMS fork with a CUDA engine). Ports, ground, stackup presets, mesh preview, simulation, field overlays.",
+  "runtime": {
+    "type": "python",
+    "min_version": "3.10"
+  },
+  "actions": [
+    {
+      "identifier": "z2ems-open",
+      "name": "Z2Labs EMS",
+      "description": "Open the Z2Labs EMS setup for this board",
+      "show-button": true,
+      "scopes": [
+        "pcb"
+      ],
+      "entrypoint": "z2ems/plugin_main.py",
+      "icons-light": [
+        "icons/z2ems_24.png"
+      ],
+      "icons-dark": [
+        "icons/z2ems_24.png"
+      ]
+    },
+    {
+      "identifier": "z2ems-stackup",
+      "name": "Z2Labs EMS: fab stackup",
+      "description": "Pick a manufacturer stackup preset (JLCPCB, ...) and write it into this board",
+      "show-button": true,
+      "scopes": [
+        "pcb"
+      ],
+      "entrypoint": "z2ems/stackup_picker.py",
+      "icons-light": [
+        "icons/z2ems_stackup_24.png"
+      ],
+      "icons-dark": [
+        "icons/z2ems_stackup_24.png"
+      ]
+    },
+    {
+      "identifier": "z2ems-simulate",
+      "name": "Z2Labs EMS: simulate",
+      "description": "Run the Z2 EMS engine on this board and open the result in the viewer",
+      "show-button": true,
+      "scopes": [
+        "pcb"
+      ],
+      "entrypoint": "z2ems/simulate.py",
+      "icons-light": [
+        "icons/z2ems_sim_24.png"
+      ],
+      "icons-dark": [
+        "icons/z2ems_sim_24.png"
+      ]
+    },
+    {
+      "identifier": "z2ems-mesh",
+      "name": "Z2Labs EMS: mesh preview",
+      "description": "Draw the FDTD mesh the engine would use on the Z2EMS.Mesh user layer",
+      "show-button": false,
+      "scopes": [
+        "pcb"
+      ],
+      "entrypoint": "z2ems/mesh_preview.py",
+      "icons-light": [
+        "icons/z2ems_mesh_24.png"
+      ],
+      "icons-dark": [
+        "icons/z2ems_mesh_24.png"
+      ]
+    },
+    {
+      "identifier": "z2ems-fields",
+      "name": "Z2Labs EMS: field overlay",
+      "description": "Overlay the current-density maps of the last run on Z2EMS.Field user layers",
+      "show-button": false,
+      "scopes": [
+        "pcb"
+      ],
+      "entrypoint": "z2ems/field_overlay.py",
+      "icons-light": [
+        "icons/z2ems_fields_24.png"
+      ],
+      "icons-dark": [
+        "icons/z2ems_fields_24.png"
+      ]
+    },
+    {
+      "identifier": "z2ems-spike0",
+      "name": "Z2Labs EMS: API capability check",
+      "description": "Run the Spike 0 IPC capability check against the open board (non-destructive, all changes are dropped)",
+      "show-button": false,
+      "scopes": [
+        "pcb"
+      ],
+      "entrypoint": "spike0/spike0_capabilities.py"
+    }
+  ]
+}

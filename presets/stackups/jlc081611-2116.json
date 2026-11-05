@@ -1,0 +1,28 @@
+{
+  "id": "JLC081611-2116",
+  "fab": "JLCPCB",
+  "description": "JLCPCB 8-layer, 1.6 mm, 2116 prepreg, 1 oz outer / 1 oz inner (JLC order dialog 'JLC081611-2116', nominal pressed thicknesses as listed by JLC)",
+  "copper_layers": 8,
+  "total_thickness_mm": 1.6,
+  "layers": [
+    { "type": "soldermask", "thickness_mm": 0.0152, "epsilon_r": 3.8, "loss_tangent": 0.02 },
+    { "type": "copper", "name": "F.Cu", "thickness_mm": 0.035 },
+    { "type": "prepreg", "material": "2116", "thickness_mm": 0.109, "epsilon_r": 4.16, "loss_tangent": 0.02 },
+    { "type": "copper", "name": "In1.Cu", "thickness_mm": 0.030 },
+    { "type": "core", "material": "NP-155F", "thickness_mm": 0.25, "epsilon_r": 4.6, "loss_tangent": 0.02 },
+    { "type": "copper", "name": "In2.Cu", "thickness_mm": 0.030 },
+    { "type": "prepreg", "material": "2116", "thickness_mm": 0.109, "epsilon_r": 4.16, "loss_tangent": 0.02, "sublayers": 2 },
+    { "type": "copper", "name": "In3.Cu", "thickness_mm": 0.030 },
+    { "type": "core", "material": "NP-155F", "thickness_mm": 0.25, "epsilon_r": 4.6, "loss_tangent": 0.02 },
+    { "type": "copper", "name": "In4.Cu", "thickness_mm": 0.030 },
+    { "type": "prepreg", "material": "2116", "thickness_mm": 0.109, "epsilon_r": 4.16, "loss_tangent": 0.02, "sublayers": 2 },
+    { "type": "copper", "name": "In5.Cu", "thickness_mm": 0.030 },
+    { "type": "core", "material": "NP-155F", "thickness_mm": 0.25, "epsilon_r": 4.6, "loss_tangent": 0.02 },
+    { "type": "copper", "name": "In6.Cu", "thickness_mm": 0.030 },
+    { "type": "prepreg", "material": "2116", "thickness_mm": 0.109, "epsilon_r": 4.16, "loss_tangent": 0.02 },
+    { "type": "copper", "name": "B.Cu", "thickness_mm": 0.035 },
+    { "type": "soldermask", "thickness_mm": 0.0152, "epsilon_r": 3.8, "loss_tangent": 0.02 }
+  ],
+  "source": "Layer thicknesses: JLCPCB order dialog 'Layer Stackup' table, 2026-10-16 screenshot. Dk values: JLCPCB impedance-calculator notes (2116 ~4.16, NP-155F core ~4.6, soldermask 3.8) - verify against JLC's current data before relying on impedance results.",
+  "spec_frequency_hz": 1e9
+}

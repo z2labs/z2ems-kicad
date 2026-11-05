@@ -1,0 +1,19 @@
+{
+  "board": "coupon_msl50",
+  "source": "Z2 EMS engine (z2ems twin pipeline), 35 um copper (PEC), JLC04161H-7628: 0.3726 mm F.Cu over 0.2104 mm 7628 prepreg er 4.4, 40 mm line, default mesh",
+  "Z0_ohm": 49.50,
+  "eeff": 3.353,
+  "closed_form": {
+    "Z0_ohm": 49.35,
+    "eeff": 3.337,
+    "method": "Hammerstad-Jensen with t = 35 um width correction"
+  },
+  "sheet_copper": {
+    "Z0_ohm": 52.87,
+    "eeff": 3.33,
+    "closed_form_Z0_ohm": 52.39,
+    "note": "zero-thickness copper; the 35 um copper of the plugin pipeline lowers Z0 by ~2.6 ohm"
+  },
+  "s11_max_db": -24.0,
+  "s21_min_db": -0.5
+}

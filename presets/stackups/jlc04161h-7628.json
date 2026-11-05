@@ -1,0 +1,20 @@
+{
+  "id": "JLC04161H-7628",
+  "fab": "JLCPCB",
+  "description": "JLCPCB 4-layer, 1.6 mm, 7628 prepreg outer, 1 oz outer / 0.5 oz inner (standard impedance-control stackup)",
+  "copper_layers": 4,
+  "total_thickness_mm": 1.6,
+  "layers": [
+    { "type": "soldermask", "thickness_mm": 0.0175, "epsilon_r": 3.8, "loss_tangent": 0.02 },
+    { "type": "copper", "name": "F.Cu", "thickness_mm": 0.035 },
+    { "type": "prepreg", "material": "7628", "thickness_mm": 0.2104, "epsilon_r": 4.4, "loss_tangent": 0.02 },
+    { "type": "copper", "name": "In1.Cu", "thickness_mm": 0.0152 },
+    { "type": "core", "material": "FR-4", "thickness_mm": 1.065, "epsilon_r": 4.6, "loss_tangent": 0.02 },
+    { "type": "copper", "name": "In2.Cu", "thickness_mm": 0.0152 },
+    { "type": "prepreg", "material": "7628", "thickness_mm": 0.2104, "epsilon_r": 4.4, "loss_tangent": 0.02 },
+    { "type": "copper", "name": "B.Cu", "thickness_mm": 0.035 },
+    { "type": "soldermask", "thickness_mm": 0.0175, "epsilon_r": 3.8, "loss_tangent": 0.02 }
+  ],
+  "source": "JLCPCB impedance-control stackup table (verify against current JLC data before relying on it)",
+  "spec_frequency_hz": 1e9
+}

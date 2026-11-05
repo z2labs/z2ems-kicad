@@ -1,0 +1,16 @@
+{
+  "id": "JLC-2L-1.6",
+  "fab": "JLCPCB",
+  "description": "JLCPCB 2-layer, 1.6 mm FR-4 (TG130/TG150), 1 oz copper both sides",
+  "copper_layers": 2,
+  "total_thickness_mm": 1.6,
+  "layers": [
+    { "type": "soldermask", "thickness_mm": 0.0175, "epsilon_r": 3.8, "loss_tangent": 0.02 },
+    { "type": "copper", "name": "F.Cu", "thickness_mm": 0.035 },
+    { "type": "core", "material": "FR-4", "thickness_mm": 1.53, "epsilon_r": 4.5, "loss_tangent": 0.02 },
+    { "type": "copper", "name": "B.Cu", "thickness_mm": 0.035 },
+    { "type": "soldermask", "thickness_mm": 0.0175, "epsilon_r": 3.8, "loss_tangent": 0.02 }
+  ],
+  "source": "JLCPCB standard 2-layer data (verify against current JLC data before relying on it)",
+  "spec_frequency_hz": 1e9
+}

@@ -1,0 +1,13 @@
+[project]
+name = "z2ems-kicad"
+version = "0.1.0"
+description = "Z2Labs EMS - EM simulation pre-processor plugin for KiCad (IPC API)"
+requires-python = ">=3.10"
+license = { text = "GPL-3.0-or-later" }
+dependencies = ["kicad-python>=0.8.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[tool.setuptools.packages.find]
+include = ["z2ems*"]

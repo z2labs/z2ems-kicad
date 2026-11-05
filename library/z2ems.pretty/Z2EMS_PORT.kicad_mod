@@ -1,0 +1,204 @@
+(footprint "Z2EMS_PORT"
+	(version 20241229)
+	(generator "z2ems")
+	(generator_version "0.0.1")
+	(layer "F.Cu")
+	(descr "Z2Labs EMS simulation port (lumped, SIG->REF). Simulation only - never manufactured.")
+	(tags "z2ems em simulation port rf")
+	(property "Reference" "P**"
+		(at 0 -1.2 0)
+		(layer "F.Fab")
+		(uuid "4a1e1b7e-0001-4a1e-9b7e-000000000001")
+		(effects
+			(font
+				(size 0.6 0.6)
+				(thickness 0.1)
+			)
+		)
+	)
+	(property "Value" "Z2EMS_PORT"
+		(at 0 1.4 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "4a1e1b7e-0001-4a1e-9b7e-000000000002")
+		(effects
+			(font
+				(size 0.5 0.5)
+				(thickness 0.08)
+			)
+		)
+	)
+	(property "Datasheet" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "4a1e1b7e-0001-4a1e-9b7e-000000000003")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Description" "Z2Labs EMS simulation port (SIG pad 1 on the signal conductor, REF pad 2 on ground). Excluded from BOM and position files."
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "4a1e1b7e-0001-4a1e-9b7e-000000000004")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Z2EMS.Role" "port"
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "4a1e1b7e-0001-4a1e-9b7e-000000000010")
+		(effects
+			(font
+				(size 0.5 0.5)
+				(thickness 0.08)
+			)
+		)
+	)
+	(property "Z2EMS.Z0" "50"
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "4a1e1b7e-0001-4a1e-9b7e-000000000011")
+		(effects
+			(font
+				(size 0.5 0.5)
+				(thickness 0.08)
+			)
+		)
+	)
+	(property "Z2EMS.Type" "lumped"
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "4a1e1b7e-0001-4a1e-9b7e-000000000012")
+		(effects
+			(font
+				(size 0.5 0.5)
+				(thickness 0.08)
+			)
+		)
+	)
+	(property "Z2EMS.Excite" "yes"
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "4a1e1b7e-0001-4a1e-9b7e-000000000013")
+		(effects
+			(font
+				(size 0.5 0.5)
+				(thickness 0.08)
+			)
+		)
+	)
+	(property "Z2EMS.Dir" "auto"
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "4a1e1b7e-0001-4a1e-9b7e-000000000014")
+		(effects
+			(font
+				(size 0.5 0.5)
+				(thickness 0.08)
+			)
+		)
+	)
+	(property "Z2EMS.RefPlane" "0"
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "4a1e1b7e-0001-4a1e-9b7e-000000000015")
+		(effects
+			(font
+				(size 0.5 0.5)
+				(thickness 0.08)
+			)
+		)
+	)
+	(property "Z2EMS.Layer" "auto"
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "4a1e1b7e-0001-4a1e-9b7e-000000000016")
+		(effects
+			(font
+				(size 0.5 0.5)
+				(thickness 0.08)
+			)
+		)
+	)
+	(attr smd exclude_from_pos_files exclude_from_bom dnp)
+	(fp_line
+		(start -0.3 0)
+		(end 0.5 0)
+		(stroke
+			(width 0.1)
+			(type default)
+		)
+		(layer "Dwgs.User")
+		(uuid "4a1e1b7e-0001-4a1e-9b7e-000000000020")
+	)
+	(fp_line
+		(start 0.5 0)
+		(end 0.3 -0.15)
+		(stroke
+			(width 0.1)
+			(type default)
+		)
+		(layer "Dwgs.User")
+		(uuid "4a1e1b7e-0001-4a1e-9b7e-000000000021")
+	)
+	(fp_line
+		(start 0.5 0)
+		(end 0.3 0.15)
+		(stroke
+			(width 0.1)
+			(type default)
+		)
+		(layer "Dwgs.User")
+		(uuid "4a1e1b7e-0001-4a1e-9b7e-000000000022")
+	)
+	(fp_circle
+		(center -0.3 0)
+		(end -0.15 0)
+		(stroke
+			(width 0.08)
+			(type default)
+		)
+		(fill no)
+		(layer "Dwgs.User")
+		(uuid "4a1e1b7e-0001-4a1e-9b7e-000000000023")
+	)
+	(fp_text user "${REFERENCE}"
+		(at 0.1 -0.55 0)
+		(layer "Dwgs.User")
+		(uuid "4a1e1b7e-0001-4a1e-9b7e-000000000024")
+		(effects
+			(font
+				(size 0.4 0.4)
+				(thickness 0.07)
+			)
+		)
+	)
+	(pad "1" smd rect
+		(at -0.3 0)
+		(size 0.2 0.2)
+		(layers "F.Cu")
+		(uuid "4a1e1b7e-0001-4a1e-9b7e-000000000031")
+	)
+	(pad "2" smd rect
+		(at 0.6 0)
+		(size 0.3 0.3)
+		(layers "F.Cu")
+		(uuid "4a1e1b7e-0001-4a1e-9b7e-000000000032")
+	)
+)

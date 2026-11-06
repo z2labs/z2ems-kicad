@@ -79,7 +79,7 @@ def strongest_inner(chosen: list[dict]) -> str:
     return inner[0] if inner else chosen[0]["layer"]
 
 
-def show_overlay(board, layer: int) -> str:
+def show_overlay(board, layer: int, dim: bool = False) -> str:
     """KiCad draws reference images UNDER all copper, so a map behind a filled ground zone is
     invisible (on the coupon the overlays were placed but the In1 GND
     fill covered them; visible only with copper hidden). Make the overlay layer active and
@@ -88,11 +88,15 @@ def show_overlay(board, layer: int) -> str:
         from kipy.proto.board import board_commands_pb2 as bc
         board.set_active_layer(layer)
         ap = board.get_editor_appearance_settings()
-        ap.inactive_layer_display = bc.ILDM_HIDDEN
+        ap.inactive_layer_display = bc.ILDM_DIMMED if dim else bc.ILDM_HIDDEN
         board.set_editor_appearance_settings(ap)
     except Exception as e:  # noqa: BLE001
         return (f"(Could not switch the view: {e}. Hide the copper layers in Appearance > Layers - "
                 "KiCad draws reference images under the copper.)\n\n")
+    if dim:
+        return (f"View: layer {layer_label(board, layer)} is active and the other layers are dimmed (high contrast), "
+                "so the map shows through the copper. Pick another Z2EMS.Field layer in the layer selector for its "
+                "map; Ctrl+H cycles the high-contrast mode back to normal.\n\n")
     return (f"View: layer {layer_label(board, layer)} is active and the other layers are hidden (high contrast), "
             "because KiCad draws reference images under the copper. Pick another field layer in the "
             "layer selector to see its map; Ctrl+H cycles the high-contrast mode back to normal.\n\n")

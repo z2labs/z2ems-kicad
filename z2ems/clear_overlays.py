@@ -36,6 +36,8 @@ def run_gui() -> int:
         n_mesh = clear_mesh(board)
         roles = resolve_role_layers(board, setup.layers, field_tags=list(setup.layers.fields), allocate=False)
         n_img = clear_field_overlays(board, [l for r, l in roles.items() if r.startswith("field:")])
+        from z2ems.field_view import clear_field_lines
+        n_img += clear_field_lines(board)
         restore_view(board)
     except Exception:  # noqa: BLE001
         notify("Z2Labs EMS - error", "Could not clear the overlays:\n" + traceback.format_exc()[-1500:], "error", s.sidecar_dir)

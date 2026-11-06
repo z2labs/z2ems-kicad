@@ -163,7 +163,7 @@ class MainWindow(wx.Frame):
         root.Add(self.est_lbl, 0, wx.LEFT | wx.RIGHT | wx.TOP, 12)
         brow = wx.BoxSizer(wx.HORIZONTAL)
         for label, h in (("Mesh preview", lambda e: self.run_script("mesh_preview.py")),
-                         ("Field overlay", lambda e: self.run_script("field_overlay.py")),
+                         ("Fields on board...", self.on_fields),
                          ("3D viewer", self.on_viewer),
                          ("Clear overlays", lambda e: self.run_script("clear_overlays.py"))):
             b = wx.Button(p, label=label)
@@ -414,6 +414,43 @@ class MainWindow(wx.Frame):
             return self.say(f"Engine: {ex}", True)
         if base:
             webbrowser.open(f"{base}/?pcb={urllib.parse.quote(str(self.s.board_path))}")
+
+    def on_fields(self, e):
+        """Surface current / layer voltage of the newest run on the board (field_view)."""
+        from z2ems import field_view as fv
+        from z2ems.simulate import api
+        found = fv.latest_v2_run(self.s.board_path)
+        if not found:
+            if any((self.s.board_path.parent / f"{self.s.board_path.stem}_twin").glob("*/fields/*.png")):
+                self.say("Opening the |J| maps of an older run (simulate again for currents, voltages and lines)...")
+                return self.run_script("field_overlay.py")
+            return self.say("No run with fields yet: Simulate first.", True)
+        run_dir, res = found
+        ch = fv.ask(self, res, run_dir.name, getattr(self, "field_choice", None))
+        if ch is None:
+            return
+        if not ch.layers:
+            return self.say("No copper layer ticked.", True)
+        self.field_choice = ch
+        try:
+            base = self.engine()
+        except Exception as ex:  # noqa: BLE001
+            return self.say(f"Engine: {ex}", True)
+        if not base:
+            return
+        self.say("Drawing the fields...")
+        wx.BeginBusyCursor()
+        try:
+            lines, _ = fv.apply(self.board, self.s.board_path, self.setup, base, run_dir, res, ch, api)
+        except Exception as ex:  # noqa: BLE001
+            return self.say(f"Fields: {ex}", True)
+        finally:
+            wx.EndBusyCursor()
+        self.setup = Setup.load(self.setup_path)
+        self.say("Fields on the board: " + "; ".join(l.strip().split(":")[0] for l in lines if l.strip().startswith(tuple(ch.layers))))
+        if os.environ.get("Z2EMS_AUTO") != "1":
+            wx.MessageBox("\n".join(lines) + "\n\nClear overlays removes them.", "Z2Labs EMS - fields",
+                          wx.OK | wx.ICON_INFORMATION | wx.STAY_ON_TOP, self)
 
     def on_simulate(self, e):
         from z2ems.simulate import api, estimate, default_threads, fmt_minutes

@@ -51,6 +51,9 @@ footprint), so matching networks and series parts are simulated as placed.
   on Linux and macOS it is built from source ([z2labs/z2ems](https://github.com/z2labs/z2ems#install)).
   An NVIDIA GPU is optional; with one, the CUDA engine is used when you choose the
   `cuda` or `auto` variant.
+- Windows: the Microsoft Visual C++ 2015-2022 x64 runtime (`vc_redist.x64.exe`). Most
+  PCs have it; on a fresh Windows without it, the Python environment KiCad creates
+  for the plugin stops with "VCRUNTIME140.dll was not found".
 
 ## Install
 

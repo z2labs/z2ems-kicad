@@ -4,10 +4,10 @@ Electromagnetic simulation of KiCad boards from inside the PCB editor. The plugi
 reads the board, its stackup and its connectors, sets up ports, runs the
 [Z2 EMS engine](https://github.com/z2labs/z2ems) (an openEMS fork with a CUDA
 engine, conformal metal edges and a KiCad importer) and brings the results back
-onto the board: S-parameters, line impedance, the FDTD mesh and current-density
-maps as overlays.
+onto the board: S-parameters, line impedance, the FDTD mesh, and the currents and
+voltages of the run as maps and lines on the board and in a 3D viewer.
 
-Status: **0.2.** Two-port lines, launches and small RF structures are routine;
+Status: **0.3.** Two-port lines, launches and small RF structures are routine;
 large boards work but the run-time estimate tells you when a board is beyond
 what a laptop CPU can do in reasonable time.
 
@@ -33,12 +33,25 @@ usable while it is open):
   nets.
 - **Simulation.** Frequency range, run-size estimate, *Mesh preview* (the exact
   engine mesh on a user layer), *Simulate* (one excitation per ticked port),
-  *Field overlay* (current-density maps on user layers), *3D viewer*, *Clear
-  overlays*. A run goes to the local engine server and continues in the
+  *Fields on board...*, *3D viewer*, *Clear overlays*. A run goes to the local
+  engine server and continues in the
   background: the window shows its progress, opens the result and the 3D viewer
   when it is done, and picks the run up again when it is reopened.
 
-Ports are saved in `<board>.z2ems/setup.json` next to the board.
+- **Fields.** Every run stores, for each driven port, the surface current on
+  every copper layer, the E-field around the stack and the voltage of each copper
+  layer against the next one, at 0.25, 0.5 and 0.9 x fmax, scaled to **1 W
+  incident at the port** (a matched 50 Ω line carries 0.2 A and 10 V).
+  *Fields on board...* draws them in the PCB editor: per copper layer a heat map
+  (|Js| in dB, or the signed voltage) and **current lines** (width = current
+  density, chevrons = direction) or **iso-voltage lines**, at the instant of the
+  strongest field or a chosen phase, on its own `Z2EMS.Field` user layer. The
+  *3D viewer* shows the same with arrows and lines, animated over the RF cycle,
+  and a **cut plane** through the stack with the E-field lines from the trace to
+  its reference plane.
+
+Ports are saved in `<board>.z2ems/setup.json` next to the board. The 3D viewer
+shows and simulates the same ports.
 
 Two-pad R, L and C footprints become lumped elements in the model (value from the
 footprint), so matching networks and series parts are simulated as placed.
@@ -112,8 +125,11 @@ engine server, default `http://127.0.0.1:8765`).
    J1 in the editor → *+ Port from selection*, same for J2) → *Mesh preview*.
 4. **Simulate**. On a 4-core laptop the run takes about 5 minutes and should
    report Z0 ≈ 49.5 Ω and εeff ≈ 3.35 (`presets/refs/coupon_msl50.json`).
-5. *Field overlay* shows where the current flows; *Clear overlays* removes
-   everything the plugin drew.
+5. *Fields on board...* → P1, the middle frequency, surface current, F.Cu and
+   In1.Cu: the signal current on the strip and its return current in the plane
+   under it. In the *3D viewer*, *Fields* → *Show fields* → *Animate*, and *E-field
+   on a cut plane* for the cross-section. *Clear overlays* removes everything the
+   plugin drew.
 
 ## Layout
 

@@ -438,6 +438,11 @@ class MainWindow(wx.Frame):
             return self.say(f"Engine: {ex}", True)
         if not base:
             return
+        try:
+            if int(api(base, "/api/health", timeout=20).get("fields_api") or 1) < 2:
+                return self.say("The installed engine is older than this plugin (no field lines): update it with Engine...", True)
+        except Exception:  # noqa: BLE001
+            pass
         self.say("Drawing the fields...")
         wx.BeginBusyCursor()
         try:

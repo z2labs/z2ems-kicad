@@ -38,7 +38,7 @@ def run_gui() -> int:
         n_img = clear_field_overlays(board, [l for r, l in roles.items() if r.startswith("field:")])
         from z2ems.field_view import clear_field_lines
         n_img += clear_field_lines(board)
-        restore_view(board)
+        restore_view(board, s.sidecar_dir)
     except Exception:  # noqa: BLE001
         notify("Z2Labs EMS - error", "Could not clear the overlays:\n" + traceback.format_exc()[-1500:], "error", s.sidecar_dir)
         return 1

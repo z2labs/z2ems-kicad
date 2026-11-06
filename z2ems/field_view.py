@@ -4,10 +4,12 @@
 The engine (POST /api/field_overlay) renders the pictures and traces the lines from the run's
 field export (fields version 2: every excitation, 1 W incident). Here each copper layer the user picks
 gets its own user layer `Z2EMS.Field.<tag>` holding
-  - the map as a locked reference image (KiCad draws those under the copper: the view is switched to
-    high contrast with the other layers dimmed), and
-  - the lines as a locked group of segments (drawn above the copper), line width growing with the
-    field strength, with chevrons pointing along the current.
+  - the map as a reference image with the lines drawn into it (white with a dark edge, width growing
+    with the field strength, chevrons along the current), so they read on any map colour and with any
+    layer colour. KiCad draws pictures under all copper, so the view then shows only the field layer,
+    the board outline and the port markers (the visible layers are saved and come back with Clear
+    overlays);
+  - without the map, the lines as a group of board graphics in the layer colour.
 Nothing touches copper, nets or the schematic; Clear overlays removes all of it.
 """
 
@@ -150,18 +152,14 @@ def draw_lines(board, layer: int, segs, name: str):
     grp = Group()
     grp._proto.name = LINES_GROUP_PREFIX + name   # noqa: SLF001
     grp.items = created
-    board.create_items([grp])
-    for it in created:
-        it.locked = True
-    for i in range(0, len(created), 500):
-        board.update_items(created[i:i + 500])
+    board.create_items([grp])         # not locked: KiCad draws a shadow around locked items
     return grp
 
 
 def apply(board, board_path: Path, setup, base: str, run_dir: Path, res: dict, choice: FieldChoice,
           api: Callable, log: Callable[[str], None] = lambda m: None) -> Tuple[List[str], Optional[int]]:
     """Put the chosen fields on the board. Returns (description lines, the user layer to show)."""
-    from z2ems.field_overlay import show_overlay
+    from z2ems.field_overlay import show_field_layers
     from z2ems.layers import ROLE_NAMES, ensure_user_layers, resolve_role_layers
     from z2ems.mesh_preview import frame_flip, pad_positions
     from z2ems.overlays import clear_field_overlays, place_field_overlay
@@ -189,31 +187,37 @@ def apply(board, board_path: Path, setup, base: str, run_dir: Path, res: dict, c
             continue
         r = api(base, "/api/field_overlay", dict(result=rel, exc=choice.exc, k=choice.k, quantity=choice.quantity,
                                                  layer=layer_name, phase=choice.phase, image=choice.image,
-                                                 lines=choice.lines, row0="max" if flip else "min"), timeout=180)
+                                                 lines=choice.lines, burn=choice.image and choice.lines,
+                                                 row0="max" if flip else "min"), timeout=180)
         x0, y0, x1, y1 = r["bbox"]
         if choice.image and r.get("png"):
             tmp = Path(setup_dir(board_path)) / f"overlay_{t}.png"
             tmp.write_bytes(base64.b64decode(r["png"]))
             nx = int(r["width"])
-            px = (x1 - x0) / max(nx - 1, 1)                 # pixel i is centred on x0 + i * px
+            if "px" in r:                                   # picture spans bbox +- pad, pixel pitch px
+                px, pad = float(r["px"]), float(r["pad"])
+            else:                                           # older engine: pixel i centred on x0 + i * px
+                px = (x1 - x0) / max(nx - 1, 1)
+                pad = px / 2
             top = -y1 if flip else y0                       # KiCad y grows down
-            place_field_overlay(board, ul, tmp, (x0 - px / 2, top - px / 2), nx * px, nx)
+            place_field_overlay(board, ul, tmp, (x0 - pad, top - pad), nx * px, nx, lock=False)
         n = 0
-        if choice.lines and r.get("lines"):
+        if choice.lines and r.get("lines") and not r.get("lines_burned"):
             dx = float(grid.get("dx", span / 900))
             segs = line_segments(r["lines"], flip, w_min, w_max, tol=dx * 0.6,
                                  chevron_every=span / 25, chevron_len=span / 250, arrows=choice.quantity == "J")
             draw_lines(board, ul, segs, t)
             n = len(segs)
         out.append(f"  {layer_name}: {r['legend']['text']}"
-                   + (f", {len(r.get('lines') or [])} {'current' if choice.quantity == 'J' else 'iso-voltage'} lines ({n} segments)" if choice.lines else "")
+                   + (f", {len(r.get('lines') or [])} {'current' if choice.quantity == 'J' else 'iso-voltage'} lines" if choice.lines else "")
                    + f" -> layer {board.get_layer_name(ul) if hasattr(board, 'get_layer_name') else ul}")
         if shown is None:
             shown = ul
     setup_save(setup, board_path)
-    if shown is not None and choice.image:
+    if shown is not None:
+        keep = [l for r, l in roles.items() if r == "ports"]
         out.append("")
-        out.append(show_overlay(board, shown, dim=True).strip())
+        out.append(show_field_layers(board, shown, keep, setup_dir(board_path)))
     return out, shown
 
 
@@ -250,8 +254,8 @@ def ask(parent, res: dict, run_name: str, last: Optional[FieldChoice] = None) ->
         g.Add(wx.StaticText(dlg, label=lbl), 0, wx.ALIGN_CENTER_VERTICAL)
         g.Add(c, 1, wx.EXPAND)
     s.Add(g, 0, wx.LEFT | wx.RIGHT | wx.EXPAND, 10)
-    img = wx.CheckBox(dlg, label="Colour map (under the copper: the view switches to high contrast)")
-    lin = wx.CheckBox(dlg, label="Lines (above the copper; width = field strength, chevrons = current direction)")
+    img = wx.CheckBox(dlg, label="Colour map (the view then shows only this field layer, the outline and the ports)")
+    lin = wx.CheckBox(dlg, label="Lines (width = field strength, chevrons = current direction)")
     s.Add(img, 0, wx.LEFT | wx.TOP, 10)
     s.Add(lin, 0, wx.LEFT | wx.TOP, 10)
     s.Add(dlg.CreateButtonSizer(wx.OK | wx.CANCEL), 0, wx.ALL | wx.ALIGN_RIGHT, 10)

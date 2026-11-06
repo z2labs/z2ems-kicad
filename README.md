@@ -45,7 +45,10 @@ usable while it is open):
   *Fields on board...* draws them in the PCB editor: per copper layer a heat map
   (|Js| in dB, or the signed voltage) and **current lines** (width = current
   density, chevrons = direction) or **iso-voltage lines**, at the instant of the
-  strongest field or a chosen phase, on its own `Z2EMS.Field` user layer. The
+  strongest field or a chosen phase, on its own `Z2EMS.Field` user layer. KiCad
+  draws pictures under the copper, so the view then shows only that field layer,
+  the board outline and the port markers; *Clear overlays* brings the other layers
+  back. The
   *3D viewer* shows the same with arrows and lines, animated over the RF cycle,
   and a **cut plane** through the stack with the E-field lines from the trace to
   its reference plane.

@@ -102,14 +102,53 @@ def show_overlay(board, layer: int, dim: bool = False) -> str:
             "layer selector to see its map; Ctrl+H cycles the high-contrast mode back to normal.\n\n")
 
 
-def restore_view(board) -> None:
+VIEW_SAVE = "view_before_fields.json"
+
+
+def show_field_layers(board, active: int, keep: list, save_dir) -> str:
+    """Show a field map: KiCad draws reference images under all copper (even in dimmed high
+    contrast the copper and the filled ground zones cover them), so only the field layer, the
+    board outline and the port markers stay visible. The layers that were visible before are
+    saved next to the board and come back with Clear overlays."""
+    import json
+    from pathlib import Path
+    from kipy.proto.board import board_commands_pb2 as bc
+    from kipy.proto.board.board_types_pb2 import BoardLayer
+    save = Path(save_dir) / VIEW_SAVE
+    try:
+        if not save.exists():
+            save.write_text(json.dumps({"visible": [int(l) for l in board.get_visible_layers()],
+                                        "active": int(board.get_active_layer())}))
+        board.set_visible_layers(sorted({int(active), int(BoardLayer.BL_Edge_Cuts), *[int(k) for k in keep]}))
+        board.set_active_layer(active)
+        ap = board.get_editor_appearance_settings()
+        ap.inactive_layer_display = bc.ILDM_NORMAL
+        board.set_editor_appearance_settings(ap)
+    except Exception as e:  # noqa: BLE001
+        return (f"(Could not switch the view: {e}. Hide the copper layers in Appearance > Layers - "
+                "KiCad draws reference images under the copper.)")
+    return (f"View: only {layer_label(board, active)}, the board outline and the port markers are shown, "
+            "because KiCad draws pictures under the copper. Tick the other Z2EMS.Field layers in "
+            "Appearance > Layers to compare; Clear overlays brings the copper layers back.")
+
+
+def restore_view(board, save_dir=None) -> None:
+    import json
+    from pathlib import Path
     try:
         from kipy.proto.board import board_commands_pb2 as bc
         from kipy.proto.board.board_types_pb2 import BoardLayer
         ap = board.get_editor_appearance_settings()
         ap.inactive_layer_display = bc.ILDM_NORMAL
         board.set_editor_appearance_settings(ap)
-        board.set_active_layer(BoardLayer.BL_F_Cu)
+        save = Path(save_dir) / VIEW_SAVE if save_dir else None
+        if save is not None and save.exists():
+            v = json.loads(save.read_text())
+            board.set_visible_layers(v["visible"])
+            board.set_active_layer(v.get("active", BoardLayer.BL_F_Cu))
+            save.unlink()
+        else:
+            board.set_active_layer(BoardLayer.BL_F_Cu)
     except Exception:  # noqa: BLE001
         pass
 

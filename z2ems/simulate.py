@@ -44,13 +44,138 @@ def api(base: str, path: str, body: dict | None = None, timeout: float = 30) -> 
         raise RuntimeError(f"engine {path}: {body}") from None
 
 
-def server_for(cfg: EngineConfig, board: Path, log) -> str:
-    """Return the base URL of a z2twin server that serves `board`'s folder; start one if needed.
+# the engine server API this plugin needs (an older server is replaced, not used)
+NEED_API = {"ports_api": 2, "fields_api": 2}
+
+
+def _norm(p) -> str:
+    """Absolute, normalised ('..' removed), case-folded on Windows; symlinks are not followed (an
+    engine folder may link its openEMS from elsewhere)."""
+    try:
+        return os.path.normcase(os.path.abspath(str(p))) if p else ""
+    except (OSError, ValueError, TypeError):
+        return ""
+
+
+def server_engine_root(h: dict) -> str:
+    """The engine folder a running server was started from: `root` from engines that report it,
+    else derived from the openEMS executable it runs (<root>/bin/openEMS.exe in a release package)."""
+    if h.get("root"):
+        return _norm(h["root"])
+    eng = h.get("engine") or ""
+    if os.sep in eng or "/" in eng:
+        d = Path(eng).parent
+        return _norm(d.parent if d.name.lower() == "bin" else d)
+    return ""
+
+
+def server_is_current(h: dict, cfg: EngineConfig) -> tuple[bool, str]:
+    """Is the server that answered `h` one of the configured engine, with the API this plugin needs?
+    A server keeps running after KiCad closes, so after an engine update or a change of engine
+    folder the old one would otherwise keep answering on the port."""
+    for k, v in NEED_API.items():
+        if int(h.get(k) or 1) < v:
+            return False, f"older engine ({k} {h.get(k) or 1} < {v})"
+    root = server_engine_root(h)
+    want = _norm(cfg.fork_root)
+    if not root:
+        return False, "a server that does not say which engine it runs"
+    exe = cfg.openems_exe or os.environ.get("Z2_OPENEMS")      # an engine run with its own openEMS build
+    if root != want and not (exe and _norm(h.get("engine")) == _norm(exe)):
+        return False, f"engine in {root}, not the selected {want}"
+    return True, ""
+
+
+def _pid_on_port(port: int) -> int | None:
+    """The process listening on a local TCP port (Windows: Get-NetTCPConnection; Linux: /proc)."""
+    try:
+        if os.name == "nt":
+            out = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command",
+                                  f"(Get-NetTCPConnection -LocalPort {int(port)} -State Listen -ErrorAction SilentlyContinue"
+                                  " | Select-Object -First 1).OwningProcess"],
+                                 capture_output=True, text=True, timeout=30, creationflags=0x08000000)
+            t = (out.stdout or "").strip()
+            return int(t) if t.isdigit() else None
+        inodes = set()
+        for f in ("/proc/net/tcp", "/proc/net/tcp6"):
+            try:
+                for line in open(f).read().splitlines()[1:]:
+                    c = line.split()
+                    if c[3] == "0A" and int(c[1].rsplit(":", 1)[1], 16) == port:
+                        inodes.add(c[9])
+            except OSError:
+                pass
+        for d in Path("/proc").iterdir():
+            if not d.name.isdigit():
+                continue
+            try:
+                for fd in (d / "fd").iterdir():
+                    t = os.readlink(fd)
+                    if t.startswith("socket:[") and t[8:-1] in inodes:
+                        return int(d.name)
+            except OSError:
+                continue
+    except Exception:  # noqa: BLE001
+        return None
+    return None
+
+
+def _cmdline(pid: int) -> str:
+    try:
+        if os.name == "nt":
+            out = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command",
+                                  f"(Get-CimInstance Win32_Process -Filter 'ProcessId={int(pid)}').CommandLine"],
+                                 capture_output=True, text=True, timeout=30, creationflags=0x08000000)
+            return out.stdout or ""
+        return Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace")
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def stop_server(base: str, h: dict, log) -> bool:
+    """Stop the engine server on `base` (only a z2twin server: checked by its command line). True when
+    the port is free afterwards."""
+    port = urllib.parse.urlparse(base).port or 8765
+    try:                                             # engines from 0.3.1 stop themselves
+        api(base, "/api/shutdown", {}, timeout=5)
+    except Exception:  # noqa: BLE001
+        pass
+    for _ in range(10):
+        time.sleep(0.3)
+        try:
+            api(base, "/api/health", timeout=2)
+        except Exception:  # noqa: BLE001
+            return True
+    pid = h.get("pid") or _pid_on_port(port)
+    if pid and "z2twin_server" in _cmdline(int(pid)):
+        try:
+            if os.name == "nt":
+                subprocess.run(["taskkill", "/PID", str(int(pid)), "/T", "/F"], capture_output=True, timeout=30,
+                               creationflags=0x08000000)
+            else:
+                os.kill(int(pid), 15)
+        except Exception:  # noqa: BLE001
+            pass
+    for _ in range(20):
+        time.sleep(0.5)
+        try:
+            api(base, "/api/health", timeout=2)
+        except Exception:  # noqa: BLE001
+            log(f"stopped the old engine server on {base}")
+            return True
+    return False
+
+
+def server_for(cfg: EngineConfig, board: Path, log, replace: bool = True) -> str:
+    """Return the base URL of a z2twin server of the configured engine that serves `board`'s folder;
+    start one if needed.
 
     One server serves one folder, so with several boards open over a day there may be several
     servers on consecutive ports: walk the ports, reuse the one whose folder contains the board,
     and start a new server only on a port where nothing answers (a long GUI test had three
-    servers on 8765-8767 and a fourth one failing to bind, 2026-10-17)."""
+    servers on 8765-8767 and a fourth one failing to bind, 2026-10-17). A server of another engine
+    folder or an older engine (left running from before an engine update - a server outlives
+    KiCad) is stopped and replaced; if it cannot be stopped, the next port is used."""
     folder = board.parent.resolve()
     u = urllib.parse.urlparse(cfg.server)
     port0 = u.port or 8765
@@ -59,27 +184,48 @@ def server_for(cfg: EngineConfig, board: Path, log) -> str:
         try:
             h = api(base, "/api/health", timeout=3)
         except (urllib.error.URLError, ConnectionError, OSError, RuntimeError):
-            _start_server(cfg, folder, base, log)
-            for _ in range(80):
-                time.sleep(0.5)
-                try:
-                    h = api(base, "/api/health", timeout=2)
-                    break
-                except Exception:  # noqa: BLE001
-                    continue
-            else:
-                raise RuntimeError(f"z2twin server did not come up on {base}")
+            h = None
+        if h is not None:
             root = Path(h.get("folder", "")).resolve()
-            if root == folder or root in folder.parents:
+            serves = bool(h.get("folder")) and (root == folder or root in folder.parents)
+            ok, why = server_is_current(h, cfg)
+            if serves and ok:
                 log(f"engine: {h.get('variant')} ({h.get('engine')}) serving {root}")
                 return base
-            log(f"server on {base} came up for {root}, not {folder}; trying the next port")
-            continue
+            if not serves:
+                log(f"server on {base} serves {root}, not {folder}; next port")
+                continue
+            if not replace:
+                raise RuntimeError(f"the engine server on {base} is not the selected engine ({why})")
+            if h.get("busy"):
+                log(f"server on {base}: {why}, but it is still running a simulation; next port")
+                continue
+            log(f"server on {base}: {why}; replacing it")
+            if not stop_server(base, h, log):
+                log(f"could not stop the server on {base}; next port")
+                continue
+        _start_server(cfg, folder, base, log)
+        for _ in range(240):                         # first start after an install: virus scan
+            time.sleep(0.5)
+            try:
+                h = api(base, "/api/health", timeout=2)
+                break
+            except Exception:  # noqa: BLE001
+                continue
+        else:
+            raise RuntimeError(f"z2twin server did not come up on {base}")
         root = Path(h.get("folder", "")).resolve()
-        if root and (root == folder or root in folder.parents):
+        # this server was started just now from the selected engine: only its API level can be wrong
+        ok, why = True, ""
+        for k, v in NEED_API.items():
+            if int(h.get(k) or 1) < v:
+                ok, why = False, f"{k} {h.get(k) or 1} < {v}"
+        if (root == folder or root in folder.parents) and ok:
             log(f"engine: {h.get('variant')} ({h.get('engine')}) serving {root}")
             return base
-        log(f"server on {base} serves {root}, not {folder}; next port")
+        if not ok:
+            raise RuntimeError(f"the selected engine is too old for this plugin ({why}): update it with Engine...")
+        log(f"server on {base} came up for {root}, not {folder}; trying the next port")
     raise RuntimeError(f"no free port for a z2twin server in {port0}..{port0 + 7}")
 
 

@@ -146,3 +146,8 @@ def test_set_engine_folder_is_used_by_config(tmp_path: Path, monkeypatch):
     for k in ("Z2EMS_ENGINE", "Z2EMS_TWIN_PY", "Z2EMS_FORK_ROOT"):
         monkeypatch.delenv(k, raising=False)
     assert config.load().fork_root == eng
+
+
+def test_stop_servers_is_a_no_op_off_windows(tmp_path, monkeypatch):
+    monkeypatch.setattr(ei.sys, "platform", "linux")
+    assert ei.stop_servers(tmp_path) == 0

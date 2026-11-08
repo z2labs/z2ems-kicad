@@ -131,6 +131,26 @@ def _safe_extract(zf: zipfile.ZipFile, target: Path, unpack_progress=None) -> No
             unpack_progress(i + 1, n)
 
 
+def stop_servers(root: Path) -> int:
+    """Stop the engine servers (and their solver runs) started from `root`: on Windows their
+    Python and DLLs are open, so the folder cannot be replaced, and a server left running would keep
+    serving the old engine. Returns how many processes were stopped."""
+    if sys.platform != "win32" or not Path(root).exists():
+        return 0
+    import subprocess
+    r = str(Path(root).resolve()).replace("'", "''")
+    ps = ("$r = '" + r + "'; $n = 0; Get-CimInstance Win32_Process | Where-Object { "
+          "($_.ExecutablePath -and $_.ExecutablePath.StartsWith($r, [StringComparison]::OrdinalIgnoreCase)) -or "
+          "($_.CommandLine -and $_.CommandLine.IndexOf($r + '\\gui\\server', [StringComparison]::OrdinalIgnoreCase) -ge 0) } | "
+          "ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue; $n++ }; $n")
+    try:
+        out = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", ps],
+                             capture_output=True, text=True, timeout=60, creationflags=0x08000000)
+        return int((out.stdout or "0").strip().splitlines()[-1] or 0)
+    except Exception:  # noqa: BLE001
+        return 0
+
+
 def install_zip(zip_path: Path, root: Path, info: dict | None = None, unpack_progress=None) -> Path:
     """Extract an engine package zip into root (replacing a previous install). The zip holds one top
     folder (Z2EMS/) or the package files directly."""
@@ -228,13 +248,28 @@ def _mb(n: int) -> str:
 
 
 _OWNER = None
+_PARENT = None
+
+
+def set_parent(win) -> None:
+    """The plugin window: the engine dialogs become its children, so they open in front of it. (A
+    dialog of another window - or of another process - opens behind an always-on-top window, and
+    Windows does not let a background process bring it forward.)"""
+    global _PARENT
+    _PARENT = win
 
 
 def _owner():
-    """A hidden always-on-top frame as parent: the plugin runs in its own process, and on Windows a
-    parentless dialog can open behind the maximized PCB editor."""
+    """The plugin window when there is one, else a hidden always-on-top frame: a parentless dialog
+    can open behind the maximized PCB editor."""
     global _OWNER
     import wx
+    if _PARENT is not None:
+        try:
+            if _PARENT.IsShown():
+                return _PARENT
+        except RuntimeError:            # the window was destroyed
+            pass
     if _OWNER is None:
         _OWNER = wx.Frame(None, title="Z2Labs EMS", style=wx.STAY_ON_TOP | wx.FRAME_NO_TASKBAR)
     return _OWNER
@@ -284,6 +319,26 @@ def setup_dialog(missing: bool = False, reason: str = "") -> bool:
         d = wx.MessageDialog(_owner(), msg, "Z2Labs EMS - engine", wx.YES_NO | wx.ICON_WARNING | wx.STAY_ON_TOP)
         d.SetYesNoLabels("&Choose folder...", "Cancel")
         return _choose_folder() if _modal(d) == wx.ID_YES else False
+    env = [k for k in ("Z2EMS_ENGINE", "Z2EMS_FORK_ROOT", "Z2EMS_TWIN_PY") if os.environ.get(k)]
+    if env:
+        head += ("\n\nNote: the environment variable " + ", ".join(env) + " chooses the engine, and it wins over "
+                 "this dialog: remove it (and restart KiCad) to use the engine installed here.")
+    new_here = installed_release(root)
+    if (new_here and new_here.get("tag") == p["tag"] and cfg.fork_root.resolve() != root.resolve()
+            and looks_like_engine(root) and not env):
+        # the latest release is already unpacked here but another engine is selected: switch, no download
+        d = wx.MessageDialog(_owner(), head + f"\n\nThe latest release {p['tag']} is already installed in\n{root}\n\n"
+                             "Use it?", "Z2Labs EMS - engine", wx.YES_NO | wx.CANCEL | wx.ICON_QUESTION | wx.STAY_ON_TOP)
+        d.SetYesNoCancelLabels(f"&Use {p['tag']}", "&Choose folder...", "Cancel")
+        r = _modal(d)
+        if r == wx.ID_NO:
+            return _choose_folder()
+        if r != wx.ID_YES:
+            return False
+        stop_servers(cfg.fork_root)
+        set_engine_folder(root)
+        _box(f"The plugin now uses the Z2 EMS engine {p['tag']} in\n{root}", wx.ICON_INFORMATION)
+        return True
     if have and have.get("tag") == p["tag"] and not missing:
         action = f"The installed engine is the latest release ({p['tag']}). Install it again?"
     else:
@@ -314,6 +369,10 @@ def setup_dialog(missing: bool = False, reason: str = "") -> bool:
         wx.YieldIfNeeded()
 
     try:
+        pd.Update(0, "Stopping the engine server of the old install...")
+        stop_servers(root)                      # the folder being replaced
+        if cfg.fork_root.resolve() != root.resolve():
+            stop_servers(cfg.fork_root)         # the engine being switched away from
         download_and_install(p, root, progress=prog, unpack_progress=unpack)
         pd.Update(1000, "Installed.")
     except Exception as e:  # noqa: BLE001

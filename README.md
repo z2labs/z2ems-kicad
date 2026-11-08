@@ -84,7 +84,9 @@ its size and the target folder) and installs it only after you click *Download*.
 is checked against the SHA-256 that GitHub publishes for it and unpacked to
 `%LOCALAPPDATA%\Z2EMS\engine`; nothing else on the computer is changed. *Choose folder...*
 points the plugin to an engine you already have (a source build on Linux/macOS, or a
-zip you unpacked yourself). *Engine...* also updates the engine to a newer release.
+zip you unpacked yourself). *Engine...* also updates the engine to a newer release; the engine server of
+the old install is stopped first, and whenever the plugin finds a server of another or an older engine on
+its port (a server keeps running after KiCad closes) it replaces it with one of the selected engine.
 
 **From this repository (development):**
 

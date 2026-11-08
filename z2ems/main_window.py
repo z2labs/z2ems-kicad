@@ -191,7 +191,7 @@ class MainWindow(wx.Frame):
         self.refresh_engine_label()
         foot.Add(self.eng_lbl, 1, wx.ALIGN_CENTER_VERTICAL)
         b = wx.Button(p, label="Engine...")
-        b.Bind(wx.EVT_BUTTON, lambda e: spawn("engine_setup.py"))
+        b.Bind(wx.EVT_BUTTON, self.on_engine)
         foot.Add(b, 0)
         root.Add(foot, 0, wx.EXPAND | wx.ALL, 12)
         p.SetSizer(root)
@@ -199,6 +199,28 @@ class MainWindow(wx.Frame):
         outer.Add(p, 1, wx.EXPAND)
         self.SetSizer(outer)
         self.Bind(wx.EVT_CLOSE, self.on_close)
+        from z2ems.engine_install import set_parent
+        set_parent(self)        # engine dialogs in front of this always-on-top window
+
+    def on_engine(self, _e=None) -> None:
+        """Engine...: in this process, with this window as the dialogs' parent (run as a separate
+        process its dialog opened behind this always-on-top window)."""
+        from z2ems.engine_install import setup_dialog
+        if self.job:                    # the progress line would overwrite a status message at once
+            wx.MessageBox("A simulation is running: change or update the engine when it has finished.",
+                          "Z2Labs EMS - engine", wx.OK | wx.ICON_INFORMATION | wx.STAY_ON_TOP, self)
+            return
+        btn = _e.GetEventObject() if _e is not None else None
+        if btn is not None:
+            btn.Disable()               # one dialog at a time
+        try:
+            if setup_dialog(missing=False):
+                self.base = None        # the next action finds (or starts) the new engine's server
+                self.say("Engine ready: the next simulation uses it.")
+        finally:
+            if btn is not None:
+                btn.Enable()
+            self.refresh_engine_label()
 
     # --- state <-> view ----------------------------------------------------------------------------
     def selected(self) -> Optional[PortDef]:
@@ -394,13 +416,8 @@ class MainWindow(wx.Frame):
         if self.base is None:
             self.say("Starting the engine... (the first start after an install can take a minute or two while Windows scans the new files)")
             wx.Yield()
-            base = server_for(load_config(), self.s.board_path, lambda m: None)
-            from z2ems.simulate import api
-            h = api(base, "/api/health", timeout=60)
-            if int(h.get("ports_api") or 1) < 2:
-                self.say("The installed engine is older than this plugin (no ground-pad ports): update it with Engine...", True)
-                return None
-            self.base = base
+            # replaces a server left running by another or an older engine (it outlives KiCad)
+            self.base = server_for(load_config(), self.s.board_path, lambda m: None)
         return self.base
 
     def run_script(self, script: str):
@@ -438,11 +455,6 @@ class MainWindow(wx.Frame):
             return self.say(f"Engine: {ex}", True)
         if not base:
             return
-        try:
-            if int(api(base, "/api/health", timeout=20).get("fields_api") or 1) < 2:
-                return self.say("The installed engine is older than this plugin (no field lines): update it with Engine...", True)
-        except Exception:  # noqa: BLE001
-            pass
         self.say("Drawing the fields...")
         wx.BeginBusyCursor()
         try:
@@ -508,7 +520,8 @@ class MainWindow(wx.Frame):
         from z2ems.simulate import api
         try:
             from z2ems.simulate import server_for
-            self.base = server_for(load_config(), self.s.board_path, lambda m: None)
+            # replace=False: never stop a server here, it may be running that very job
+            self.base = server_for(load_config(), self.s.board_path, lambda m: None, replace=False)
             j = api(self.base, f"/api/job/{self.setup.run.last_run}", timeout=5)
         except Exception:  # noqa: BLE001
             return

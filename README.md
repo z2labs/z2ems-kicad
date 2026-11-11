@@ -7,7 +7,7 @@ engine, conformal metal edges and a KiCad importer) and brings the results back
 onto the board: S-parameters, line impedance, the FDTD mesh, and the currents and
 voltages of the run as maps and lines on the board and in a 3D viewer.
 
-Status: **0.3.** Two-port lines, launches and small RF structures are routine;
+Status: **0.3.2.** Two-port lines, launches and small RF structures are routine;
 large boards work but the run-time estimate tells you when a board is beyond
 what a laptop CPU can do in reasonable time.
 
@@ -24,19 +24,27 @@ usable while it is open):
   here* changes one end, *Show* selects the port's pads in the editor. Connector
   suggestions are listed but used only when you tick and add them; a port without
   a reference is shown as incomplete and not simulated.
-- **Markers.** Every port is drawn on the `Z2EMS.Ports` user layer: rings with
+- **Markers.** Every port is drawn on a user layer (the first free one, e.g. `User.1`;
+  the window names it): rings with
   + and -, arrows from each ground pad to the signal pad (or a down arrow and the
   reference layer name), and a "P1 50 Ω" label. A user layer has no copper and no
   nets, so DRC, ERC, the BOM and the fabrication outputs are unaffected.
 - **Board.** Stackup check and *Fab stackup...* (JLCPCB 2-layer 1.6 mm,
   JLC04161H-7628, JLC081611-2116, your own JSON or an imported JLC table), ground
   nets.
-- **Simulation.** Frequency range, run-size estimate, *Mesh preview* (the exact
-  engine mesh on a user layer), *Simulate* (one excitation per ticked port),
+- **Simulation.** Frequency range, loss models, run-size estimate, *Mesh preview* (the
+  exact engine mesh on a user layer), *Simulate* (one excitation per ticked port),
   *Fields on board...*, *3D viewer*, *Clear overlays*. A run goes to the local
   engine server and continues in the
   background: the window shows its progress, opens the result and the 3D viewer
   when it is done, and picks the run up again when it is reopened.
+- **Losses.** The stackup's εr and tan δ are always used. *laminate dispersion* adds
+  the Djordjevic–Sarkar model (flat tan δ, causal εr(f); slower), *copper loss and
+  roughness* gives the copper its finite conductivity and a surface roughness Rq
+  (empty = from the stackup, about 2 µm for standard foil). Both off is the fast,
+  lossless-conductor model the reference numbers below were made with; tick them when
+  the insertion loss matters. *R, L, C parts* simulates two-pad passives with a value
+  as lumped elements.
 
 - **Fields.** Every run stores, for each driven port, the surface current on
   every copper layer, the E-field around the stack and the voltage of each copper
@@ -45,7 +53,7 @@ usable while it is open):
   *Fields on board...* draws them in the PCB editor: per copper layer a heat map
   (|Js| in dB, or the signed voltage) and **current lines** (width = current
   density, chevrons = direction) or **iso-voltage lines**, at the instant of the
-  strongest field or a chosen phase, on its own `Z2EMS.Field` user layer. KiCad
+  strongest field or a chosen phase, on its own user layer (`User.4`, `User.5`, ...). KiCad
   draws pictures under the copper, so the view then shows only that field layer,
   the board outline and the port markers; *Clear overlays* brings the other layers
   back. The
@@ -61,15 +69,16 @@ footprint), so matching networks and series parts are simulated as placed.
 
 ## Requirements
 
-- KiCad **10** with *Preferences → Plugins → Enable IPC API server* ticked.
+- KiCad **10** with *Preferences → Plugins → Enable KiCad API* ticked (KiCad offers
+  to do this when the plugin is installed).
 - The **Z2 EMS engine** (~160 MB, separate from the plugin). On Windows the plugin
   offers to download and install it the first time an action needs it (see below);
   on Linux and macOS it is built from source ([z2labs/z2ems](https://github.com/z2labs/z2ems#install)).
   An NVIDIA GPU is optional; with one, the CUDA engine is used when you choose the
   `cuda` or `auto` variant.
-- Windows: the Microsoft Visual C++ 2015-2022 x64 runtime (`vc_redist.x64.exe`). Most
-  PCs have it; on a fresh Windows without it, the Python environment KiCad creates
-  for the plugin stops with "VCRUNTIME140.dll was not found".
+- Windows: the Microsoft Visual C++ 2015-2022 x64 runtime
+  ([vc_redist.x64.exe](https://aka.ms/vs/17/release/vc_redist.x64.exe)). Most PCs have
+  it. See *Troubleshooting* if the plugin buttons do not appear.
 
 ## Install
 
@@ -123,18 +132,43 @@ engine server, default `http://127.0.0.1:8765`).
 
 ## Quick start
 
-1. Open `examples/coupon_msl50.kicad_pcb` from the engine folder (a 40 mm 50 Ω
-   microstrip with two SMA pads) in the PCB editor.
+1. Download the example board
+   [coupon_msl50.kicad_pcb](https://github.com/z2labs/z2ems/raw/main/examples/coupon_msl50.kicad_pcb)
+   (a 40 mm 50 Ω microstrip with two SMA pads) into a folder of its own and open it in
+   the PCB editor. Once the engine is installed the same file is in its `examples`
+   folder.
 2. **Fab stackup** → JLC04161H-7628 → Apply.
 3. **Z2Labs EMS** → tick J1 and J2 under *Suggestions* → *Add ticked* (or select
-   J1 in the editor → *+ Port from selection*, same for J2) → *Mesh preview*.
-4. **Simulate**. On a 4-core laptop the run takes about 5 minutes and should
-   report Z0 ≈ 49.5 Ω and εeff ≈ 3.35 (`presets/refs/coupon_msl50.json`).
+   J1 in the editor → *+ Port from selection*, same for J2) → *Mesh preview*. On
+   Windows the first action that needs the engine offers to download it (about
+   160 MB, a minute or two) and then carries on.
+4. **Simulate**. The run takes 5 to 15 minutes on a 4-core computer (the window
+   shows the elapsed time, and its estimate uses this computer's measured speed from
+   the second run on) and should report Z0 ≈ 49.5 Ω and εeff ≈ 3.35
+   (`presets/refs/coupon_msl50.json`).
 5. *Fields on board...* → P1, the middle frequency, surface current, F.Cu and
    In1.Cu: the signal current on the strip and its return current in the plane
    under it. In the *3D viewer*, *Fields* → *Show fields* → *Animate*, and *E-field
    on a cut plane* for the cross-section. *Clear overlays* removes everything the
    plugin drew.
+
+## Troubleshooting
+
+- **No Z2Labs EMS buttons in the PCB editor after the install (Windows), or a
+  "VCRUNTIME140.dll was not found" message from `pythonw.exe`.** The Visual C++ runtime
+  is missing, and KiCad has left a half-made Python environment for the plugin that it
+  does not repair by itself. Install
+  [vc_redist.x64.exe](https://aka.ms/vs/17/release/vc_redist.x64.exe), close KiCad,
+  delete the folder
+  `%LOCALAPPDATA%\KiCad\10.0\python-environments\com.github.z2labs.z2ems` and start
+  KiCad again: it rebuilds the environment (a minute, needs the internet) and the
+  buttons appear.
+- **No buttons, no message.** Check *Preferences → Plugins → Enable KiCad API*, then
+  restart KiCad. The same folder can be deleted to make KiCad set the plugin up again.
+- **The engine server.** Simulations run in a small local server
+  (`http://127.0.0.1:8765`, this computer only) that keeps running after KiCad closes so
+  that a long run can finish. Its log is in `%LOCALAPPDATA%\Z2EMS\logs` (Linux:
+  `~/.local/state/z2ems`).
 
 ## Layout
 

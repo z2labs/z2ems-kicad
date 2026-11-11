@@ -42,6 +42,15 @@ class ComponentsSetup:
 
 
 @dataclass
+class MaterialsSetup:
+    """Loss models of a run. Off = constant permittivity and perfect conductors (fast; the laminate's
+    tan(delta) from the stackup is still applied as a conductivity)."""
+    dispersion: bool = False             # Djordjevic-Sarkar laminate: flat tan(delta), causal er(f)
+    copper_loss: bool = False            # finite copper conductivity with surface roughness
+    roughness_um: Optional[float] = None  # Rq override; None = from the stackup (standard foil about 2 um)
+
+
+@dataclass
 class PortExtra:
     deembed_mm: float = 0.0
     note: str = ""
@@ -87,6 +96,7 @@ class Setup:
     stackup: StackupSetup = field(default_factory=StackupSetup)
     nets: NetsSetup = field(default_factory=NetsSetup)
     components: ComponentsSetup = field(default_factory=ComponentsSetup)
+    mat: MaterialsSetup = field(default_factory=MaterialsSetup)
     ports: Dict[str, PortExtra] = field(default_factory=dict)    # fp-uuid -> extras (Z2EMS_PORT footprints)
     port_defs: List[PortDef] = field(default_factory=list)        # v3: ports as + pad / - pads or plane
     sim: SimSetup = field(default_factory=SimSetup)
@@ -97,7 +107,16 @@ class Setup:
 
     def materials(self) -> dict:
         """`materials` for the engine's /api/run and /api/mesh."""
-        return {"components": self.components.default == "lumped"}
+        return {"components": self.components.default == "lumped",
+                "dispersion": "debye" if self.mat.dispersion else None,
+                "conductor": "loss" if self.mat.copper_loss else "pec",
+                "roughness_um": self.mat.roughness_um if self.mat.copper_loss else None}
+
+    def model_text(self) -> str:
+        """One line for dialogs: what the run models."""
+        return ("laminate with dispersion" if self.mat.dispersion else "constant permittivity") + ", " + (
+            "lossy copper" + (f" (Rq {self.mat.roughness_um:g} um)" if self.mat.roughness_um is not None else " (roughness from the stackup)")
+            if self.mat.copper_loss else "ideal copper (no conductor loss)")
 
     def to_json(self) -> str:
         d = asdict(self)
@@ -118,6 +137,7 @@ class Setup:
         if raw.get("version", 1) < 2 and s.components.default == "remove":
             s.components.default = "lumped"      # v1 wrote the old default, never a user choice
         s.version = SETUP_VERSION
+        s.mat = MaterialsSetup(**raw.get("mat", {}))
         s.ports = {k: PortExtra(**v) for k, v in raw.get("ports", {}).items()}
         s.port_defs = [PortDef.from_dict(d) for d in raw.get("port_defs", [])]
         s.sim = SimSetup(**raw.get("sim", {}))

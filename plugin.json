@@ -58,7 +58,7 @@
     {
       "identifier": "z2ems-mesh",
       "name": "Z2Labs EMS: mesh preview",
-      "description": "Draw the FDTD mesh the engine would use on the Z2EMS.Mesh user layer",
+      "description": "Draw the FDTD mesh the engine would use on a user layer",
       "show-button": false,
       "scopes": [
         "pcb"
@@ -74,7 +74,7 @@
     {
       "identifier": "z2ems-fields",
       "name": "Z2Labs EMS: field overlay",
-      "description": "Overlay the current-density maps of the last run on Z2EMS.Field user layers",
+      "description": "Overlay the current-density maps of the last run on user layers",
       "show-button": false,
       "scopes": [
         "pcb"

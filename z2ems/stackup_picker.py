@@ -54,15 +54,15 @@ def run_gui() -> int:
     try:
         s = connect()
     except Exception as e:  # noqa: BLE001
-        print(f"Cannot connect to KiCad IPC API: {e}", file=sys.stderr, flush=True)
-        wx.MessageBox(f"Cannot connect to KiCad IPC API:\n{e}", "Z2Labs EMS", wx.ICON_ERROR)
+        print(f"Cannot connect to KiCad (Preferences > Plugins > Enable KiCad API): {e}", file=sys.stderr, flush=True)
+        wx.MessageBox(f"Cannot connect to KiCad (Preferences > Plugins > Enable KiCad API):\n{e}", "Z2Labs EMS", wx.ICON_ERROR | wx.STAY_ON_TOP)
         return 1
     board = s.board
     copper = board.get_copper_layer_count()
     presets = list_presets()
 
     dlg = wx.Dialog(None, title=f"Z2Labs EMS - fab stackup for {s.board_path.name} ({copper} copper layers)",
-                    size=(980, 640), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+                    size=(1180, 660), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER | wx.STAY_ON_TOP)
     root = wx.BoxSizer(wx.VERTICAL)
     top = wx.BoxSizer(wx.HORIZONTAL)
 
@@ -128,23 +128,23 @@ def run_gui() -> int:
             preset = parse_jlc_table(text, pid)
             path = save_preset(preset, USER_PRESET_DIR)
         except Exception as e:  # noqa: BLE001
-            wx.MessageBox(f"Import failed:\n{e}", "Z2Labs EMS", wx.ICON_ERROR)
+            wx.MessageBox(f"Import failed:\n{e}", "Z2Labs EMS", wx.ICON_ERROR | wx.STAY_ON_TOP, dlg)
             return
-        wx.MessageBox(f"Saved {path}\nReview Dk/Df values in the file if needed.", "Z2Labs EMS", wx.ICON_INFORMATION)
+        wx.MessageBox(f"Saved {path}\nReview Dk/Df values in the file if needed.", "Z2Labs EMS", wx.ICON_INFORMATION | wx.STAY_ON_TOP, dlg)
         refresh_list(select_id=pid)
 
     def on_apply(_):
         p = presets[lst.GetSelection()]
         if wx.MessageBox(f"Apply {p['id']} to {s.board_path.name}?\n\nThe board will be saved first; "
                          f"a backup copy is kept next to it.", "Z2Labs EMS",
-                         wx.YES_NO | wx.ICON_QUESTION) != wx.YES:
+                         wx.YES_NO | wx.ICON_QUESTION | wx.STAY_ON_TOP, dlg) != wx.YES:
             return
         try:
             bak = apply_preset_to_board(board, s.board_path, p)
         except Exception:  # noqa: BLE001
-            wx.MessageBox("Apply failed:\n" + traceback.format_exc()[-2500:], "Z2Labs EMS", wx.ICON_ERROR)
+            wx.MessageBox("Apply failed:\n" + traceback.format_exc()[-2500:], "Z2Labs EMS", wx.ICON_ERROR | wx.STAY_ON_TOP, dlg)
             return
-        wx.MessageBox(f"{p['id']} applied and board reloaded.\nBackup: {bak}", "Z2Labs EMS", wx.ICON_INFORMATION)
+        wx.MessageBox(f"{p['id']} applied and board reloaded.\nBackup: {bak}", "Z2Labs EMS", wx.ICON_INFORMATION | wx.STAY_ON_TOP, dlg)
         show(lst.GetSelection())
 
     import_btn.Bind(wx.EVT_BUTTON, on_import)

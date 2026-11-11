@@ -69,13 +69,17 @@ def to_kicad(mesh: dict, flip: bool) -> tuple[list, list, tuple]:
     return xs, ys, (bx0, by0, bx1, by1)
 
 
+GRADE_WORDS = {"ok": "good", "rough": "usable (uneven cell sizes)", "coarse": "too coarse for this fmax"}
+
+
 def quality_text(mesh: dict, nx: int, ny: int) -> str:
     q = mesh.get("quality", {})
     z = mesh.get("z", [])
     lines = [f"Mesh: {len(mesh['x'])} x {len(mesh['y'])} x {len(z)} lines "
-             f"({q.get('cells', 0) / 1e6:.2f} MCells incl. air/PML); drawn on the board: {nx} x {ny}",
+             f"({q.get('cells', 0) / 1e6:.2f} million cells incl. air and absorber); drawn on the board: {nx} x {ny}",
              f"Cell size: min {q.get('min_mm')} mm, max {q.get('max_mm')} mm, resolution {mesh.get('res_mm', 0):.3f} mm",
-             f"Grading {q.get('grading')}, aspect {q.get('aspect')}, {q.get('cells_per_wavelength')} cells/wavelength -> {q.get('grade', '?')}"]
+             f"Quality: {GRADE_WORDS.get(q.get('grade'), q.get('grade', '?'))}  (neighbouring cells differ by up to {q.get('grading')}x, longest cell "
+             f"{q.get('aspect')}x its width, {q.get('cells_per_wavelength')} cells per wavelength at fmax)"]
     lz = mesh.get("layers_z", [])
     if lz:
         lines.append("Copper z (mm): " + ", ".join(f"{d['layer']} {d['z']:.4f}" for d in lz))
@@ -93,8 +97,9 @@ def size_text(mesh: dict, n_ports: int, bbox_mm, nx: int, ny: int, threads: int)
     2.8 px/mm are a plain tint - and nothing said that this mesh is days of compute)."""
     nz = len(mesh.get("z", [])) or 1
     mc = len(mesh["x"]) * len(mesh["y"]) * nz / 1e6
-    minutes = run_minutes(mc, n_ports, threads)
-    out = [f"Simulation of this mesh: {mc:.1f} MCells x {n_ports} excitations, "
+    from z2ems.simulate import speed_factor
+    minutes = run_minutes(mc, n_ports, threads) * speed_factor("plain")[0]      # this computer's measured speed, if known
+    out = [f"Simulation of this mesh: {mc:.1f} million cells x {n_ports} excitations, "
            f"roughly {fmt_minutes(minutes)} on {threads} threads here."]
     if minutes > BIG_RUN_MIN:
         out.append("WARNING: too big for this machine - coarsen the mesh, lower fmax, "
@@ -133,39 +138,55 @@ def run_gui(clear_only: bool = False) -> int:
     cfg = load_config()
     specs, how = port_specs(board, setup)
     if not specs:
-        notify("Z2Labs EMS", "No ports yet: open Z2Labs EMS and add the ports (+ pad and its ground reference) first.",
-               "warn", s.sidecar_dir)
+        notify("Z2Labs EMS", NO_PORTS, "warn", s.sidecar_dir)
         return 1
     log_lines: list[str] = []
     try:
         base = server_for(cfg, s.board_path, log_lines.append)
-        mesh = api(base, "/api/mesh", dict(path=str(s.board_path), ports=specs, fmax=setup.sim.f_stop_hz,
-                                           materials=setup.materials()), timeout=300)
-    except RuntimeError as e:          # engine said no (e.g. no reference copper under a connector pad)
-        txt = (f"The engine could not build these ports:\n{e}\n\nPorts ({how}): " + ", ".join(_pname(p) for p in specs)
-               + "\n\nCheck the port's + pad and its - reference in the Z2Labs EMS window.")
-        notify("Z2Labs EMS - error", txt, "error", s.sidecar_dir)
+        mesh = fetch_mesh(base, s.board_path, specs, setup)
+        txt = draw_preview(board, setup, mesh, specs, how, s.board_path.name)
+    except Exception as e:  # noqa: BLE001
+        notify("Z2Labs EMS - error", error_text(e, specs, how), "error", s.sidecar_dir)
         return 1
-    except Exception:  # noqa: BLE001
-        notify("Z2Labs EMS - error", "Could not get the mesh:\n" + traceback.format_exc()[-1500:], "error", s.sidecar_dir)
-        return 1
+    setup.save(s.sidecar_dir / SETUP_FILENAME)
+    notify("Z2Labs EMS - mesh preview", txt, "info", s.sidecar_dir)
+    return 0
+
+
+NO_PORTS = "No ports yet: add the ports (+ pad and its ground reference) in the Z2Labs EMS window first."
+
+
+def fetch_mesh(base: str, board_path, specs: list, setup) -> dict:
+    """The mesh of the next run from the engine (no KiCad calls: safe in a worker thread)."""
+    return api(base, "/api/mesh", dict(path=str(board_path), ports=specs, fmax=setup.sim.f_stop_hz,
+                                       materials=setup.materials()), timeout=300)
+
+
+def draw_preview(board, setup, mesh: dict, specs: list, how: str, board_name: str) -> str:
+    """Draw the mesh lines on the mesh user layer; returns the text of the notice."""
     flip = frame_flip(mesh, pad_positions(board))
     xs, ys, bbox = to_kicad(mesh, flip)
     ensure_user_layers(board, len(ROLE_NAMES) + 1)
     roles = resolve_role_layers(board, setup.layers)
     layer = roles.get("mesh")
     if layer is None:
-        notify("Z2Labs EMS - error", "No free user layer for the mesh (enable one in Board Setup > Layers).", "error", s.sidecar_dir)
-        return 1
+        raise LookupError("No free user layer for the mesh (enable one in Board Setup > Layers).")
     draw_mesh(board, layer, xs, ys, bbox)
-    setup.save(s.sidecar_dir / SETUP_FILENAME)
-    txt = (f"{s.board_path.name}: ports ({how}) " + ", ".join(_pname(p) for p in specs) +
-           f", fmax {setup.sim.f_stop_hz / 1e9:.2f} GHz\n\n" + quality_text(mesh, len(xs), len(ys)) +
-           "\n\n" + size_text(mesh, len(specs), bbox, len(xs), len(ys), default_threads()) +
-           f"\n\nLines are a locked group on the mesh layer{' (engine y axis mirrored to KiCad)' if flip else ''}. "
-           "Run again to regenerate; the group is removed before a new one is drawn.")
-    notify("Z2Labs EMS - mesh preview", txt, "info", s.sidecar_dir)
-    return 0
+    return (f"{board_name}: ports ({how}) " + ", ".join(_pname(p) for p in specs) +
+            f", fmax {setup.sim.f_stop_hz / 1e9:.2f} GHz\n\n" + quality_text(mesh, len(xs), len(ys)) +
+            "\n\n" + size_text(mesh, len(specs), bbox, len(xs), len(ys), default_threads()) +
+            f"\n\nThe lines are on user layer {board.get_layer_name(layer)}"
+            f"{' (engine y axis mirrored to KiCad)' if flip else ''}. Clear overlays removes them; "
+            "Mesh preview again redraws them.")
+
+
+def error_text(e: Exception, specs: list, how: str) -> str:
+    if isinstance(e, LookupError):
+        return str(e)
+    if isinstance(e, RuntimeError):    # engine said no (e.g. no reference copper under a connector pad)
+        return (f"The engine could not build these ports:\n{e}\n\nPorts ({how}): " + ", ".join(_pname(p) for p in specs)
+                + "\n\nCheck the port's + pad and its - reference in the Z2Labs EMS window.")
+    return "Could not get the mesh:\n" + "".join(traceback.format_exception(type(e), e, e.__traceback__))[-1500:]
 
 
 if __name__ == "__main__":

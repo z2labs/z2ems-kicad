@@ -41,7 +41,7 @@ def test_to_kicad_mirrors_and_clips():
 
 def test_quality_text_mentions_grade():
     t = mp.quality_text(MESH, 4, 5)
-    assert "-> ok" in t and "drawn on the board: 4 x 5" in t
+    assert "Quality: good" in t and "drawn on the board: 4 x 5" in t
 
 
 def test_size_text_warns_for_huge_dense_mesh():

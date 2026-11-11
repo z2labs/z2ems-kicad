@@ -95,7 +95,7 @@ def show_overlay(board, layer: int, dim: bool = False) -> str:
                 "KiCad draws reference images under the copper.)\n\n")
     if dim:
         return (f"View: layer {layer_label(board, layer)} is active and the other layers are dimmed (high contrast), "
-                "so the map shows through the copper. Pick another Z2EMS.Field layer in the layer selector for its "
+                "so the map shows through the copper. Pick another field layer in the layer selector for its "
                 "map; Ctrl+H cycles the high-contrast mode back to normal.\n\n")
     return (f"View: layer {layer_label(board, layer)} is active and the other layers are hidden (high contrast), "
             "because KiCad draws reference images under the copper. Pick another field layer in the "
@@ -128,8 +128,9 @@ def show_field_layers(board, active: int, keep: list, save_dir) -> str:
         return (f"(Could not switch the view: {e}. Hide the copper layers in Appearance > Layers - "
                 "KiCad draws reference images under the copper.)")
     return (f"View: only {layer_label(board, active)}, the board outline and the port markers are shown, "
-            "because KiCad draws pictures under the copper. Tick the other Z2EMS.Field layers in "
-            "Appearance > Layers to compare; Clear overlays brings the copper layers back.")
+            "because KiCad draws pictures under the copper. Tick the other field layers (the user layers the plugin named in the notice) in "
+            "Appearance > Layers to compare; Clear overlays brings the copper layers back. "
+            "If the colours look pale, raise Appearance > Objects > Images (the slider sets the opacity of pictures).")
 
 
 def restore_view(board, save_dir=None) -> None:

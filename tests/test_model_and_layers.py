@@ -144,12 +144,27 @@ Layer	Copper	0.035mm"""
 def test_components_default_lumped_and_v1_migration():
     import json
     from z2ems.model import Setup
-    assert Setup().materials() == {"components": True}
+    lossless = {"dispersion": None, "conductor": "pec", "roughness_um": None}
+    assert Setup().materials() == {"components": True, **lossless}
     v1 = json.dumps({"version": 1, "components": {"default": "remove", "overrides": {}}})
     s = Setup.from_json(v1)
     assert s.components.default == "lumped" and s.version == 3
     v2 = json.dumps({"version": 2, "components": {"default": "remove", "overrides": {}}})
-    assert Setup.from_json(v2).materials() == {"components": False}   # an explicit v2 choice stays
+    assert Setup.from_json(v2).materials() == {"components": False, **lossless}   # an explicit v2 choice stays
+
+
+def test_loss_models_reach_the_engine_request():
+    """The window's loss ticks are what /api/run and /api/mesh get (plugin runs were always lossless)."""
+    from z2ems.model import Setup
+    s = Setup()
+    s.mat.dispersion, s.mat.copper_loss, s.mat.roughness_um = True, True, 1.5
+    assert s.materials() == {"components": True, "dispersion": "debye", "conductor": "loss", "roughness_um": 1.5}
+    s2 = Setup.from_json(s.to_json())
+    assert s2.mat.dispersion and s2.mat.copper_loss and s2.mat.roughness_um == 1.5
+    s2.mat.copper_loss = False                    # Rq only belongs to lossy copper
+    assert s2.materials()["roughness_um"] is None and s2.materials()["conductor"] == "pec"
+    assert "dispersion" in s.model_text() and "Rq 1.5" in s.model_text()
+    assert "constant permittivity" in Setup().model_text() and "ideal copper" in Setup().model_text()
 
 
 def test_ground_nets_with_rule_area_zone():

@@ -11,6 +11,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -204,16 +205,27 @@ def server_for(cfg: EngineConfig, board: Path, log, replace: bool = True) -> str
             if not stop_server(base, h, log):
                 log(f"could not stop the server on {base}; next port")
                 continue
-        _start_server(cfg, folder, base, log)
-        for _ in range(240):                         # first start after an install: virus scan
-            time.sleep(0.5)
-            try:
-                h = api(base, "/api/health", timeout=2)
-                break
-            except Exception:  # noqa: BLE001
-                continue
+        lock = _start_lock(port)
+        if lock is not None:
+            _start_server(cfg, folder, base, log)
         else:
-            raise RuntimeError(f"z2twin server did not come up on {base}")
+            log(f"another action is starting the server on {base}; waiting for it")
+        try:
+            for _ in range(240):                     # first start after an install: virus scan
+                time.sleep(0.5)
+                try:
+                    h = api(base, "/api/health", timeout=2)
+                    break
+                except Exception:  # noqa: BLE001
+                    continue
+            else:
+                raise RuntimeError(f"z2twin server did not come up on {base} (log: {log_dir()})")
+        finally:
+            if lock is not None:
+                try:
+                    lock.unlink()
+                except OSError:
+                    pass
         root = Path(h.get("folder", "")).resolve()
         # this server was started just now from the selected engine: only its API level can be wrong
         ok, why = True, ""
@@ -229,10 +241,36 @@ def server_for(cfg: EngineConfig, board: Path, log, replace: bool = True) -> str
     raise RuntimeError(f"no free port for a z2twin server in {port0}..{port0 + 7}")
 
 
+def log_dir() -> Path:
+    """Where the engine server logs go (they used to land next to the user's board)."""
+    if os.name == "nt":
+        d = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "Z2EMS" / "logs"
+    else:
+        d = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state")) / "z2ems"
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        d = Path(tempfile.gettempdir())
+    return d
+
+
+def _start_lock(port: int) -> Path | None:
+    """One starter per port: two actions clicked together each started a server on the same port.
+    Returns the lock file when this process may start the server, None when another one is at it."""
+    f = Path(tempfile.gettempdir()) / f"z2ems_server_{int(port)}.starting"
+    try:
+        if f.exists() and time.time() - f.stat().st_mtime > 150:
+            f.unlink()
+        os.close(os.open(str(f), os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+        return f
+    except OSError:
+        return None
+
+
 def _start_server(cfg: EngineConfig, folder: Path, base: str, log) -> None:
     port = urllib.parse.urlparse(base).port or 8765
     env = cfg.server_env()
-    logf = open(folder / "z2twin_server.log", "a", encoding="utf-8")
+    logf = open(log_dir() / f"server_{port}.log", "a", encoding="utf-8")
     kw = {}
     if os.name == "nt":
         # CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP. Not DETACHED_PROCESS: a detached parent has
@@ -282,6 +320,9 @@ def compare_reference(stem: str, res: dict) -> list[str]:
         lines.append(f"  |S11| max: {mx:.1f} dB (reference limit {ref['s11_max_db']:.0f} dB) -> {'ok' if mx <= ref['s11_max_db'] else 'ABOVE'}")
     if ref.get("note"):
         lines.append("  " + ref["note"])
+    m = res.get("materials") or {}
+    if m.get("dispersion") == "debye" or m.get("conductor") == "loss":
+        lines.append("  The reference is for the lossless model (no dispersion, ideal copper): a run with losses differs by a few percent.")
     return lines
 
 
@@ -302,7 +343,10 @@ def line_model_doubt(res: dict) -> str:
 
 def summary(res: dict) -> str:
     out = [f"Board: {res.get('board')}", f"Stackup: {res.get('stackup')}",
-           f"Mesh: {res.get('mesh')} ({res.get('mcells')} MCells)"]
+           f"Mesh: {' x '.join(str(v) for v in res.get('mesh') or [])} ({float(res.get('mcells') or 0):.2f} million cells)"]
+    m = res.get("materials") or {}
+    out.append("Model: " + ("laminate with dispersion" if m.get("dispersion") == "debye" else "constant permittivity") + ", "
+               + ("lossy copper" if m.get("conductor") == "loss" else "ideal copper (no conductor loss)"))
     if "Z0_ohm" in res:
         why = line_model_doubt(res)
         if why:
@@ -328,6 +372,44 @@ def summary(res: dict) -> str:
 # smallest cell, so cells^1.33 is a fair first-order model for a size warning.
 REF_MCELLS, REF_SECONDS_PER_EXC, REF_THREADS = 0.39, 195.0, 3
 BIG_RUN_MIN = 30.0
+
+
+SPEED_FILE = Path.home() / ".z2ems_speed.json"
+
+
+def speed_factor(kind: str = "plain", path: Path | None = None) -> tuple[float, bool]:
+    """(factor on the run-time model, measured on this computer?). `kind`: "plain" or "debye" (a
+    dispersive laminate adds Debye poles to every cell). The first coupon on a 4-thread virtual
+    machine took 12.5 min against "about 5 min" (2026-11-11): from the second run on the estimate
+    uses what this computer did."""
+    try:
+        j = json.loads((path or SPEED_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        j = {}
+    if isinstance(j.get(kind), (int, float)) and 0.05 < j[kind] < 50:
+        return float(j[kind]), True
+    if kind == "debye":
+        f, known = speed_factor("plain", path)
+        return f * 1.6, False
+    return 1.0, False
+
+
+def record_speed(model_minutes: float, actual_minutes: float, kind: str = "plain", path: Path | None = None) -> None:
+    """Remember how a finished run compared with the (uncalibrated) model."""
+    if model_minutes <= 0 or actual_minutes <= 0:
+        return
+    path = path or SPEED_FILE
+    try:
+        j = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        j = {}
+    f = min(50.0, max(0.05, actual_minutes / model_minutes))
+    old = j.get(kind)
+    j[kind] = round(0.5 * old + 0.5 * f, 3) if isinstance(old, (int, float)) else round(f, 3)
+    try:
+        path.write_text(json.dumps(j), encoding="utf-8")
+    except OSError:
+        pass
 
 
 def estimate(base: str, board: Path, specs: list[dict], fmax: float, threads: int, log, materials: dict | None = None) -> dict | None:

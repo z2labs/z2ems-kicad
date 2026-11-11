@@ -2,7 +2,7 @@
   "$schema": "https://go.kicad.org/pcm/schemas/v1",
   "name": "Z2Labs EMS",
   "description": "EM simulation of PCBs in KiCad: ports, stackup, mesh preview, S-parameters, currents and voltages on the board (openEMS-based).",
-  "description_full": "Electromagnetic (FDTD) simulation of the open board from inside the PCB editor.\n\n- Ports as a + pad and its ground reference (connector GND pads, IC GND pins or the plane below), picked from the PCB editor selection and drawn as markers on a user layer (no DRC/ERC impact).\n- Fab stackup presets (JLCPCB 2-layer and 4-layer, own JSON).\n- Mesh preview on a user layer with cell count and run-time estimate.\n- Simulate: S-parameters (Touchstone), line impedance and effective permittivity, 3D viewer.\n- Fields of every run, scaled to 1 W: surface current maps with current lines and layer voltages with iso-voltage lines on the board; a 3D viewer with arrows, phase animation and E-field cut planes.\n- Two-pad R/L/C footprints are simulated as lumped elements.\n\nThe solver is the Z2 EMS engine (openEMS with a CUDA engine, conformal metal edges and a KiCad importer, GPL-3.0). It is a separate download of about 160 MB: on Windows the plugin offers to download and install it on first use (from github.com/z2labs/z2ems/releases, SHA-256 checked); on Linux and macOS it is built from source and the plugin is pointed to its folder.\n\nRequires KiCad 10 with the IPC API server enabled (Preferences > Plugins).",
+  "description_full": "Electromagnetic (FDTD) simulation of the open board from inside the PCB editor.\n\n- Ports as a + pad and its ground reference (connector GND pads, IC GND pins or the plane below), picked from the PCB editor selection and drawn as markers on a user layer (no DRC/ERC impact).\n- Fab stackup presets (JLCPCB 2-layer and 4-layer, own JSON).\n- Mesh preview on a user layer with cell count and run-time estimate.\n- Simulate: S-parameters (Touchstone), line impedance and effective permittivity, 3D viewer.\n- Fields of every run, scaled to 1 W: surface current maps with current lines and layer voltages with iso-voltage lines on the board; a 3D viewer with arrows, phase animation and E-field cut planes.\n- Loss models: laminate dispersion (Djordjevic-Sarkar), copper loss with roughness; two-pad R/L/C footprints as lumped elements.\n\nThe solver is the Z2 EMS engine (openEMS with a CUDA engine, conformal metal edges and a KiCad importer, GPL-3.0). It is a separate download of about 160 MB: on Windows the plugin offers to download and install it on first use (from github.com/z2labs/z2ems/releases, SHA-256 checked); on Linux and macOS it is built from source and the plugin is pointed to its folder.\n\nRequires KiCad 10 with the KiCad API enabled (Preferences > Plugins). On Windows the Microsoft Visual C++ x64 runtime must be installed; if the plugin buttons do not appear, see Troubleshooting in the README.",
   "identifier": "com.github.z2labs.z2ems",
   "type": "plugin",
   "author": {
@@ -26,7 +26,7 @@
   ],
   "versions": [
     {
-      "version": "0.3.1",
+      "version": "0.3.2",
       "status": "testing",
       "kicad_version": "10.0",
       "runtime": "ipc",

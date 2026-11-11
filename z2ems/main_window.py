@@ -12,6 +12,8 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import threading
+import time
 import traceback
 import urllib.parse
 import webbrowser
@@ -68,6 +70,12 @@ class MainWindow(wx.Frame):
         self.Fit()
         self.SetMinSize(self.GetSize())
         self.CentreOnScreen()
+        try:        # at the right edge of the screen: the middle of the board stays visible
+            area = wx.Display(max(0, wx.Display.GetFromWindow(self))).GetClientArea()
+            w, h = self.GetSize()
+            self.SetPosition((area.x + max(0, area.width - w - 24), area.y + max(0, (area.height - h) // 3)))
+        except Exception:  # noqa: BLE001
+            pass
         if self.setup.run.last_run:
             wx.CallAfter(self.resume_job)
 
@@ -159,16 +167,46 @@ class MainWindow(wx.Frame):
         frow.Add(self.f1, 0, wx.RIGHT, 4)
         frow.Add(wx.StaticText(p, label="GHz"), 0, wx.ALIGN_CENTER_VERTICAL)
         root.Add(frow, 0, wx.LEFT | wx.RIGHT, 12)
+        m = self.setup.mat
+        mrow = wx.BoxSizer(wx.HORIZONTAL)
+        mrow.Add(wx.StaticText(p, label="Losses"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
+        self.m_disp = wx.CheckBox(p, label="laminate dispersion")
+        self.m_disp.SetToolTip("Djordjevic-Sarkar laminate model: the stackup's tan δ stays flat over frequency and εr(f) is causal. "
+                               "Slower. Off: constant εr, the loss tangent applied at mid-band.")
+        self.m_cu = wx.CheckBox(p, label="copper loss and roughness")
+        self.m_cu.SetToolTip("Finite conductivity of the copper with surface roughness. Off: ideal conductors, no conductor loss.")
+        self.m_rq = wx.TextCtrl(p, value="" if m.roughness_um is None else f"{m.roughness_um:g}", size=(54, -1))
+        self.m_rq.SetHint("auto")
+        self.m_rq.SetToolTip("Copper roughness Rq in µm. Empty: from the stackup (standard foil is about 2 µm).")
+        self.m_comp = wx.CheckBox(p, label="R, L, C parts")
+        self.m_comp.SetToolTip("Two-pad resistors, capacitors and inductors with a value are simulated as lumped elements. "
+                               "Off: their pads stay open.")
+        self.m_disp.SetValue(m.dispersion)
+        self.m_cu.SetValue(m.copper_loss)
+        self.m_comp.SetValue(self.setup.components.default == "lumped")
+        self.m_rq.Enable(m.copper_loss)
+        for c in (self.m_disp, self.m_cu, self.m_comp):
+            c.Bind(wx.EVT_CHECKBOX, self.on_materials)
+        self.m_rq.Bind(wx.EVT_KILL_FOCUS, self.on_materials)
+        mrow.Add(self.m_disp, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 12)
+        mrow.Add(self.m_cu, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 6)
+        mrow.Add(wx.StaticText(p, label="Rq"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 4)
+        mrow.Add(self.m_rq, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 4)
+        mrow.Add(wx.StaticText(p, label="µm"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 14)
+        mrow.Add(self.m_comp, 0, wx.ALIGN_CENTER_VERTICAL)
+        root.Add(mrow, 0, wx.LEFT | wx.RIGHT | wx.TOP, 12)
         self.est_lbl = wx.StaticText(p, label="")
         root.Add(self.est_lbl, 0, wx.LEFT | wx.RIGHT | wx.TOP, 12)
         brow = wx.BoxSizer(wx.HORIZONTAL)
-        for label, h in (("Mesh preview", lambda e: self.run_script("mesh_preview.py")),
+        for label, h in (("Mesh preview", self.on_mesh),
                          ("Fields on board...", self.on_fields),
                          ("3D viewer", self.on_viewer),
-                         ("Clear overlays", lambda e: self.run_script("clear_overlays.py"))):
+                         ("Clear overlays", self.on_clear)):
             b = wx.Button(p, label=label)
             b.Bind(wx.EVT_BUTTON, h)
             brow.Add(b, 0, wx.RIGHT, 6)
+            if label == "Mesh preview":
+                self.mesh_btn = b
         brow.AddStretchSpacer()
         self.sim_btn = wx.Button(p, label="Simulate")
         f = self.sim_btn.GetFont()
@@ -221,6 +259,87 @@ class MainWindow(wx.Frame):
             if btn is not None:
                 btn.Enable()
             self.refresh_engine_label()
+
+    def on_materials(self, e=None) -> None:
+        m = self.setup.mat
+        m.dispersion, m.copper_loss = self.m_disp.GetValue(), self.m_cu.GetValue()
+        self.setup.components.default = "lumped" if self.m_comp.GetValue() else "remove"
+        self.m_rq.Enable(m.copper_loss)
+        t = self.m_rq.GetValue().strip().replace(",", ".")
+        try:
+            m.roughness_um = None if not t else min(20.0, max(0.0, float(t)))
+        except ValueError:
+            m.roughness_um = None
+            self.m_rq.SetValue("")
+            self.say("Rq: a number in µm, or empty for the stackup's value.", True)
+        self.save()
+        if e is not None:
+            e.Skip()
+
+    def box(self, text: str, title: str, icon=wx.ICON_INFORMATION) -> None:
+        """A notice in front of this always-on-top window."""
+        if os.environ.get("Z2EMS_AUTO") == "1":
+            return
+        d = wx.MessageDialog(self, text, title, wx.OK | icon | wx.STAY_ON_TOP)
+        d.ShowModal()
+        d.Destroy()
+
+    def on_mesh(self, e=None) -> None:
+        """Mesh preview, in this process: its dialogs (and the engine download on first use) open in front of
+        this window, the button is off while it works, and the action goes on after an engine install. As a
+        separate process its windows opened behind the PCB editor and a second click started it twice."""
+        from z2ems import mesh_preview as mp
+        from z2ems.simulate import port_specs
+        self.save()
+        specs, how = port_specs(self.board, self.setup)
+        if not specs:
+            return self.say(mp.NO_PORTS, True)
+        try:
+            base = self.engine()
+        except Exception as ex:  # noqa: BLE001
+            return self.say(f"Engine: {ex}", True)
+        if not base:
+            return
+        self.mesh_btn.Disable()
+        self.say("Mesh preview: building the mesh of this board...")
+
+        def work():
+            try:
+                res = mp.fetch_mesh(base, self.s.board_path, specs, self.setup)
+            except Exception as ex:  # noqa: BLE001
+                res = ex
+            wx.CallAfter(done, res)
+
+        def done(res):
+            try:
+                if isinstance(res, Exception):
+                    raise res
+                txt = mp.draw_preview(self.board, self.setup, res, specs, how, self.s.board_path.name)
+            except Exception as ex:  # noqa: BLE001
+                self.mesh_btn.Enable()
+                self.say("Mesh preview failed.", True)
+                return self.box(mp.error_text(ex, specs, how), "Z2Labs EMS - error", wx.ICON_ERROR)
+            self.mesh_btn.Enable()
+            self.save()
+            self.say("Mesh drawn on the board. " + txt.split("\n\n")[2].splitlines()[0])
+            self.box(txt, "Z2Labs EMS - mesh preview")
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def on_clear(self, e=None) -> None:
+        from z2ems.field_overlay import restore_view
+        from z2ems.field_view import clear_field_lines
+        from z2ems.overlays import clear_field_overlays, clear_mesh
+        try:
+            n_mesh = clear_mesh(self.board)
+            roles = resolve_role_layers(self.board, self.setup.layers, field_tags=list(self.setup.layers.fields), allocate=False)
+            n_img = clear_field_overlays(self.board, [l for r, l in roles.items() if r.startswith("field:")])
+            n_img += clear_field_lines(self.board)
+            restore_view(self.board, self.s.sidecar_dir)
+        except Exception:  # noqa: BLE001
+            self.say("Could not clear the overlays.", True)
+            return self.box("Could not clear the overlays:\n" + traceback.format_exc()[-1500:], "Z2Labs EMS - error", wx.ICON_ERROR)
+        self.say(f"Removed {n_mesh} mesh lines and {n_img} field overlays; normal view restored.")
 
     # --- state <-> view ----------------------------------------------------------------------------
     def selected(self) -> Optional[PortDef]:
@@ -470,11 +589,11 @@ class MainWindow(wx.Frame):
                           wx.OK | wx.ICON_INFORMATION | wx.STAY_ON_TOP, self)
 
     def on_simulate(self, e):
-        from z2ems.simulate import api, estimate, default_threads, fmt_minutes
+        from z2ems.simulate import api, estimate, default_threads, fmt_minutes, speed_factor
         ports = runnable(self.ports)
         if not ports:
             return self.say("No complete port.", True)
-        self.save()
+        self.on_materials()
         try:
             base = self.engine()
         except Exception as ex:  # noqa: BLE001
@@ -487,9 +606,16 @@ class MainWindow(wx.Frame):
         self.say("Building the mesh for an estimate...")
         wx.Yield()
         size = estimate(base, self.s.board_path, specs, self.setup.sim.f_stop_hz, threads, lambda m: None, self.setup.materials())
-        sz = (f"Mesh {size['cells']} = {size['mcells']:.1f} MCells, {len(excite)} excitation(s): about "
-              f"{fmt_minutes(size['minutes'] * len(excite) / max(1, len(specs)))} on {threads} CPU threads."
+        kind = "debye" if self.setup.mat.dispersion else "plain"
+        factor, measured = speed_factor(kind)
+        self.model_min = size["minutes"] * len(excite) / max(1, len(specs)) if size else 0.0
+        self.run_kind = kind
+        sz = (f"Mesh {size['cells']} = {size['mcells']:.1f} million cells, {len(excite)} excitation(s): about "
+              f"{fmt_minutes(self.model_min * factor)} on {threads} CPU threads"
+              + (" (from earlier runs on this computer)." if measured else
+                 " - a first guess: it can be two or three times that; later estimates use this computer's measured speed.")
               if size else "The mesh size could not be estimated.")
+        sz += "\nModel: " + self.setup.model_text() + "."
         txt = "\n".join(f"  {p.name}:  + {p.plus_text()}\n        - {p.minus_text()}   ({p.z0:g} Ω)" for p in ports)
         if os.environ.get("Z2EMS_AUTO") != "1":
             d = wx.MessageDialog(self, f"Simulate {self.s.board_path.name}\n\n{txt}\n\n"
@@ -512,6 +638,8 @@ class MainWindow(wx.Frame):
         self.save()
         self.sim_btn.Enable(False)
         self.poll_fails = 0
+        self.t_run = time.time()
+        self.est_min = self.model_min * factor
         self.timer.Start(int(POLL_S * 1000))
         self.say(f"Run {self.job} started.")
 
@@ -547,17 +675,38 @@ class MainWindow(wx.Frame):
         st = j.get("state", "?")
         pr = j.get("progress", {}) or {}
         frac = float(pr.get("frac") or 0)          # of the current excitation
+        ts = int(pr.get("timestep") or 0)
         try:
             exc, n = int(pr.get("exc") or 0), int(pr.get("n") or 0)
-            if n > 0 and exc >= 1:
-                frac = (exc - 1 + frac) / n
         except (TypeError, ValueError):
-            pass
-        self.gauge.SetValue(int(1000 * min(max(frac, 0.0), 1.0)))
+            exc, n = 0, 0
+        # an engine before 0.3.2 keeps the last excitation's numbers until the next one's first time step:
+        # the bar jumped to full and back
+        if exc != getattr(self, "_p_exc", None):
+            self._p_exc, self._p_stale = exc, getattr(self, "_p_ts", 0)
+        if getattr(self, "_p_stale", 0) and ts == self._p_stale:
+            frac, ts = 0.0, 0
+        else:
+            self._p_stale = 0
+        self._p_ts = int(pr.get("timestep") or 0)
+        if n > 0 and exc >= 1:
+            frac = (exc - 1 + frac) / n
         if st in ("queued", "running"):
-            speed = pr.get("mcells_s")
-            self.say(f"{st}: excitation {pr.get('exc', 0)}/{pr.get('n', '?')},  timestep {pr.get('timestep', 0)},  "
-                     f"energy {pr.get('energy_db', 0):.0f} dB" + (f",  {float(speed):.1f} MCells/s" if speed else ""))
+            self.gauge.SetValue(int(1000 * min(max(frac, 0.0), 0.99)))
+            el = time.time() - getattr(self, "t_run", time.time())
+            clock = f"{int(el // 60)}:{int(el % 60):02d}"
+            est = getattr(self, "est_min", 0.0)
+            clock += f" of about {max(1, round(est))} min" if est and el < est * 60 else ""
+            head = f"Running, {clock}:  excitation {max(exc, 1)} of {n or '?'}" if st == "running" else "Queued behind another run"
+            if st == "running" and ts == 0:
+                self.say(f"{head} - {pr.get('stage') or 'preparing the model'} (mesh and engine setup: up to a few minutes, "
+                         "the time steps start after it)")
+            elif st == "running":
+                speed = pr.get("mcells_s")
+                self.say(f"{head},  time step {ts},  energy {pr.get('energy_db', 0):.0f} dB (stops at -40 dB)"
+                         + (f",  {float(speed):.1f} million cells/s" if speed else ""))
+            else:
+                self.say(head)
             return
         self.timer.Stop()
         self.job = None
@@ -565,6 +714,10 @@ class MainWindow(wx.Frame):
         if st == "done" and j.get("result"):
             from z2ems.simulate import summary, compare_reference
             res = j["result"]
+            if getattr(self, "t_run", None) and getattr(self, "model_min", 0):      # followed from its start
+                from z2ems.simulate import record_speed
+                record_speed(self.model_min, (time.time() - self.t_run) / 60.0, getattr(self, "run_kind", "plain"))
+            self.t_run = None
             text = summary(res)
             ref = compare_reference(self.s.board_path.stem, res)
             if ref:

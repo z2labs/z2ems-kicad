@@ -14,15 +14,21 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from z2ems.ipc import connect  # noqa: E402
+from z2ems.ipc import connect, connect_error_text  # noqa: E402
 from z2ems.jlc_import import parse_jlc_table, save_preset  # noqa: E402
 from z2ems.stackup import USER_PRESET_DIR, list_presets, read_stackup  # noqa: E402
 from z2ems.stackup_file import apply_preset_to_board  # noqa: E402
 
 
+def _wrap(text: str, width: int = 68) -> list[str]:
+    """The detail pane is about 75 characters wide: longer lines were cut off at its right edge."""
+    import textwrap
+    return textwrap.wrap(text, width) or [""]
+
+
 def preset_table(p: dict) -> str:
     lines = [f"{p['id']}  ({p['fab']}, {p['copper_layers']} copper layers, nominal {p['total_thickness_mm']} mm)",
-             p.get("description", ""), ""]
+             *_wrap(p.get("description", "")), ""]
     for L in p["layers"]:
         t = L["type"]
         sub = L.get("sublayers", 1)
@@ -32,7 +38,7 @@ def preset_table(p: dict) -> str:
         name = L.get("name") or L.get("material") or ""
         thick = f"{L['thickness_mm']:.4f} mm" + (f" x{sub}" if sub > 1 else "")
         lines.append(f"  {t:10s} {name:10s} {thick:>14s}{extra}")
-    lines += ["", "Source: " + p.get("source", "")]
+    lines += ["", *_wrap("Source: " + p.get("source", ""))]
     return "\n".join(lines)
 
 
@@ -55,7 +61,7 @@ def run_gui() -> int:
         s = connect()
     except Exception as e:  # noqa: BLE001
         print(f"Cannot connect to KiCad (Preferences > Plugins > Enable KiCad API): {e}", file=sys.stderr, flush=True)
-        wx.MessageBox(f"Cannot connect to KiCad (Preferences > Plugins > Enable KiCad API):\n{e}", "Z2Labs EMS", wx.ICON_ERROR | wx.STAY_ON_TOP)
+        wx.MessageBox(connect_error_text(e), "Z2Labs EMS", wx.ICON_ERROR | wx.STAY_ON_TOP)
         return 1
     board = s.board
     copper = board.get_copper_layer_count()
@@ -77,7 +83,7 @@ def run_gui() -> int:
         lst.Clear()
         for p in presets:
             fit = p["copper_layers"] == copper
-            lst.Append(("  " if fit else "x ") + f"{p['id']}  - {p['fab']} {p['copper_layers']}L  {p.get('description','')[:70]}")
+            lst.Append(("  " if fit else "x ") + f"{p['id']}  - {p['fab']} {p['copper_layers']}L  {p.get('description','')[:46]}")
         if presets:
             idx = 0
             for i, p in enumerate(presets):

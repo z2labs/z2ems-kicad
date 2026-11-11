@@ -132,11 +132,12 @@ engine server, default `http://127.0.0.1:8765`).
 
 ## Quick start
 
-1. Download the example board
-   [coupon_msl50.kicad_pcb](https://github.com/z2labs/z2ems/raw/main/examples/coupon_msl50.kicad_pcb)
-   (a 40 mm 50 Ω microstrip with two SMA pads) into a folder of its own and open it in
-   the PCB editor. Once the engine is installed the same file is in its `examples`
-   folder.
+1. Download the example project
+   [coupon_msl50.zip](https://github.com/z2labs/z2ems-kicad/raw/main/examples/coupon_msl50.zip)
+   (a 40 mm 50 Ω microstrip with two SMA pads) and unpack it into a folder of its own.
+   In KiCad: *File → Open Project* → `coupon_msl50.kicad_pro`, then open the PCB editor
+   from the project window. (Do not open the board by double click while another KiCad
+   window is running: KiCad then starts a second PCB editor that plugins cannot reach.)
 2. **Fab stackup** → JLC04161H-7628 → Apply.
 3. **Z2Labs EMS** → tick J1 and J2 under *Suggestions* → *Add ticked* (or select
    J1 in the editor → *+ Port from selection*, same for J2) → *Mesh preview*. On
@@ -163,6 +164,11 @@ engine server, default `http://127.0.0.1:8765`).
   `%LOCALAPPDATA%\KiCad\10.0\python-environments\com.github.z2labs.z2ems` and start
   KiCad again: it rebuilds the environment (a minute, needs the internet) and the
   buttons appear.
+- **"This PCB editor cannot be reached by the plugin" / "kicad_token did not match" /
+  "Connection refused".** The PCB editor was started while another KiCad window was
+  open (a board opened by double click, a second KiCad). Only the KiCad that was started
+  first talks to plugins. Close all KiCad windows, open the project in KiCad and start
+  the PCB editor from the project window.
 - **No buttons, no message.** Check *Preferences → Plugins → Enable KiCad API*, then
   restart KiCad. The same folder can be deleted to make KiCad set the plugin up again.
 - **The engine server.** Simulations run in a small local server

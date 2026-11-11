@@ -27,7 +27,7 @@ import wx  # noqa: E402
 from z2ems import SETUP_FILENAME, __version__  # noqa: E402
 from z2ems import port_board as pb  # noqa: E402
 from z2ems.config import load as load_config  # noqa: E402
-from z2ems.ipc import connect  # noqa: E402
+from z2ems.ipc import connect, connect_error_text  # noqa: E402
 from z2ems.layers import ROLE_NAMES, ensure_user_layers, resolve_role_layers  # noqa: E402
 from z2ems.model import Setup  # noqa: E402
 from z2ems.portdefs import PortDef, renumber, runnable  # noqa: E402
@@ -294,13 +294,14 @@ class MainWindow(wx.Frame):
         specs, how = port_specs(self.board, self.setup)
         if not specs:
             return self.say(mp.NO_PORTS, True)
+        self.mesh_btn.Disable()
         try:
-            base = self.engine()
+            base = self.engine("The mesh preview needs the Z2 EMS engine.")
         except Exception as ex:  # noqa: BLE001
+            self.mesh_btn.Enable()
             return self.say(f"Engine: {ex}", True)
         if not base:
-            return
-        self.mesh_btn.Disable()
+            return self.mesh_btn.Enable()
         self.say("Mesh preview: building the mesh of this board...")
 
         def work():
@@ -525,10 +526,10 @@ class MainWindow(wx.Frame):
             txt = f"Engine: {cfg.fork_root}" + (f"  ({rel.get('tag')})" if rel else "")
         self.eng_lbl.SetLabel(f"{txt}   ·   plugin {__version__}")
 
-    def engine(self) -> Optional[str]:
+    def engine(self, reason: str = "Simulating needs the Z2 EMS engine.") -> Optional[str]:
         from z2ems.engine_install import ensure_engine
         from z2ems.simulate import server_for
-        ok = ensure_engine("Simulating needs the Z2 EMS engine.")
+        ok = ensure_engine(reason)
         self.refresh_engine_label()
         if not ok:
             return None
@@ -703,7 +704,7 @@ class MainWindow(wx.Frame):
                          "the time steps start after it)")
             elif st == "running":
                 speed = pr.get("mcells_s")
-                self.say(f"{head},  time step {ts},  energy {pr.get('energy_db', 0):.0f} dB (stops at -40 dB)"
+                self.say(f"{head},  time step {ts},  energy {round(float(pr.get('energy_db') or 0)) + 0:d} dB (stops at -40 dB)"
                          + (f",  {float(speed):.1f} million cells/s" if speed else ""))
             else:
                 self.say(head)
@@ -744,7 +745,7 @@ def main() -> int:
     try:
         s = connect()
     except Exception as e:  # noqa: BLE001
-        wx.MessageBox(f"Cannot connect to KiCad: {e}", "Z2Labs EMS", wx.ICON_ERROR | wx.STAY_ON_TOP)
+        wx.MessageBox(connect_error_text(e), "Z2Labs EMS", wx.ICON_ERROR | wx.STAY_ON_TOP)
         return 1
     try:
         w = MainWindow(s)

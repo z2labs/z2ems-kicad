@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from z2ems import SETUP_FILENAME  # noqa: E402
 from z2ems.config import load as load_config  # noqa: E402
-from z2ems.ipc import connect, mm  # noqa: E402
+from z2ems.ipc import connect, connect_error_text, mm  # noqa: E402
 from z2ems.layers import ROLE_NAMES, ensure_user_layers, resolve_role_layers  # noqa: E402
 from z2ems.model import Setup  # noqa: E402
 from z2ems.overlays import clear_mesh, draw_mesh  # noqa: E402
@@ -91,14 +91,14 @@ def quality_text(mesh: dict, nx: int, ny: int) -> str:
 FIT_PIXELS = 500
 
 
-def size_text(mesh: dict, n_ports: int, bbox_mm, nx: int, ny: int, threads: int) -> str:
+def size_text(mesh: dict, n_ports: int, bbox_mm, nx: int, ny: int, threads: int, kind: str = "plain") -> str:
     """Run-time estimate and a readability hint for the drawn lines (GUI test:
     the 563 MCell mesh of a 180 mm 8-layer board looked like "nothing drawn" - 4974 lines at
     2.8 px/mm are a plain tint - and nothing said that this mesh is days of compute)."""
     nz = len(mesh.get("z", [])) or 1
     mc = len(mesh["x"]) * len(mesh["y"]) * nz / 1e6
     from z2ems.simulate import speed_factor
-    minutes = run_minutes(mc, n_ports, threads) * speed_factor("plain")[0]      # this computer's measured speed, if known
+    minutes = run_minutes(mc, n_ports, threads) * speed_factor(kind)[0]      # this computer's measured speed, if known
     out = [f"Simulation of this mesh: {mc:.1f} million cells x {n_ports} excitations, "
            f"roughly {fmt_minutes(minutes)} on {threads} threads here."]
     if minutes > BIG_RUN_MIN:
@@ -123,7 +123,7 @@ def run_gui(clear_only: bool = False) -> int:
     try:
         s = connect()
     except Exception as e:  # noqa: BLE001
-        notify("Z2Labs EMS - error", f"Cannot connect to KiCad: {e}", "error")
+        notify("Z2Labs EMS - error", connect_error_text(e), "error")
         return 1
     board = s.board
     setup = Setup.load(s.sidecar_dir / SETUP_FILENAME)
@@ -174,7 +174,8 @@ def draw_preview(board, setup, mesh: dict, specs: list, how: str, board_name: st
     draw_mesh(board, layer, xs, ys, bbox)
     return (f"{board_name}: ports ({how}) " + ", ".join(_pname(p) for p in specs) +
             f", fmax {setup.sim.f_stop_hz / 1e9:.2f} GHz\n\n" + quality_text(mesh, len(xs), len(ys)) +
-            "\n\n" + size_text(mesh, len(specs), bbox, len(xs), len(ys), default_threads()) +
+            "\n\n" + size_text(mesh, len(specs), bbox, len(xs), len(ys), default_threads(),
+                              "debye" if setup.mat.dispersion else "plain") +
             f"\n\nThe lines are on user layer {board.get_layer_name(layer)}"
             f"{' (engine y axis mirrored to KiCad)' if flip else ''}. Clear overlays removes them; "
             "Mesh preview again redraws them.")

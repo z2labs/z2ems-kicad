@@ -52,3 +52,19 @@ def test_size_text_warns_for_huge_dense_mesh():
     big = dict(MESH, x=list(range(2545)), y=list(range(2489)), z=list(range(89)))
     t = mp.size_text(big, 4, (-90, -90, 90, 90), 2515, 2459, 3)
     assert "WARNING" in t and "days" in t and "tint" in t
+
+
+def test_connect_error_text_names_the_second_kicad():
+    from z2ems.ipc import connect_error_text
+    t = connect_error_text(RuntimeError("KiCad returned error: the provided kicad_token did not match this KiCad instance's token"))
+    assert "another KiCad window" in t and "Close all KiCad windows" in t
+    assert "Connection refused" in connect_error_text(ConnectionError("Failed to connect to KiCad: Connection refused"))
+    assert connect_error_text(RuntimeError("boom")) == "Cannot connect to KiCad: boom"
+
+
+def test_size_text_uses_the_speed_of_the_chosen_model(tmp_path, monkeypatch):
+    from z2ems import simulate
+    monkeypatch.setattr(simulate, "speed_factor", lambda kind="plain", path=None: ((1e7, True) if kind == "debye" else (1.0, True)))
+    a = mp.size_text(MESH, 2, (0, 0, 20, 14), 4, 5, 3)
+    b = mp.size_text(MESH, 2, (0, 0, 20, 14), 4, 5, 3, "debye")
+    assert a != b

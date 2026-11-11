@@ -280,7 +280,7 @@ def _start_server(cfg: EngineConfig, folder: Path, base: str, log) -> None:
         kw["creationflags"] = 0x08000000 | 0x00000200
     else:
         kw["start_new_session"] = True
-    subprocess.Popen([str(cfg.twin_py), str(cfg.server_script), str(folder), "--port", str(port)],
+    subprocess.Popen([str(cfg.twin_py), "-u", str(cfg.server_script), str(folder), "--port", str(port)],
                      stdout=logf, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, env=env,
                      cwd=str(cfg.fork_root / "twin"), **kw)
     log(f"started z2twin server on {base} for {folder}")

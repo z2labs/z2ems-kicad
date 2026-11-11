@@ -360,12 +360,12 @@ def setup_dialog(missing: bool = False, reason: str = "") -> bool:
 
     def prog(done: int, total: int) -> bool:
         frac = done / total if total else 0.0
-        cont, _ = pd.Update(min(int(frac * 950), 950), f"Downloading {p['asset']}: {done / 1e6:.0f} / {_mb(total)}")
+        cont, _ = pd.Update(min(int(frac * 400), 400), f"Downloading {p['asset']}: {done / 1e6:.0f} / {_mb(total)}")
         wx.YieldIfNeeded()
         return cont
 
     def unpack(i: int, n: int) -> None:
-        pd.Update(950 + int(49 * i / max(n, 1)), f"Unpacking the engine: {i} / {n} files")
+        pd.Update(400 + int(599 * i / max(n, 1)), f"Unpacking the engine: {i} / {n} files")
         wx.YieldIfNeeded()
 
     try:

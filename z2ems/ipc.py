@@ -55,6 +55,26 @@ class Session:
         return p.with_name(p.stem + SIDECAR_SUFFIX)
 
 
+def connect_error_text(e: BaseException) -> str:
+    """What to tell the user when the plugin cannot reach the PCB editor that started it.
+
+    Windows fresh-install test, 2026-11-11: a board opened by double click while another KiCad window
+    (the project manager) was running gave "kicad_token did not match", and after closing the other
+    window "Connection refused" - with the API enabled. KiCad gives the plugin interface to the KiCad
+    that started first; a PCB editor started beside it has none."""
+    t = str(e)
+    low = t.lower()
+    if "token" in low or "refused" in low or "failed to connect" in low:
+        return ("This PCB editor cannot be reached by the plugin.\n\n"
+                "It was most likely started while another KiCad window was open (for example a board opened "
+                "by double click while the KiCad project manager was running): only the KiCad that was started "
+                "first talks to plugins.\n\n"
+                "Close all KiCad windows, then open the project in KiCad and start the PCB editor from there.\n"
+                "If it still fails, check Preferences > Plugins > Enable KiCad API.\n\n"
+                f"(KiCad said: {t})")
+    return f"Cannot connect to KiCad: {t}"
+
+
 class NotReadyError(RuntimeError):
     """KiCad is reachable but no board is loaded yet / it keeps answering 'busy'."""
 

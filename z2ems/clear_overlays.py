@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from z2ems import SETUP_FILENAME  # noqa: E402
 from z2ems.field_overlay import restore_view  # noqa: E402
-from z2ems.ipc import connect  # noqa: E402
+from z2ems.ipc import connect, connect_error_text  # noqa: E402
 from z2ems.layers import resolve_role_layers  # noqa: E402
 from z2ems.model import Setup  # noqa: E402
 from z2ems.overlays import clear_field_overlays, clear_mesh  # noqa: E402
@@ -28,7 +28,7 @@ def run_gui() -> int:
     try:
         s = connect()
     except Exception as e:  # noqa: BLE001
-        notify("Z2Labs EMS - error", f"Cannot connect to KiCad: {e}", "error")
+        notify("Z2Labs EMS - error", connect_error_text(e), "error")
         return 1
     board = s.board
     setup = Setup.load(s.sidecar_dir / SETUP_FILENAME)

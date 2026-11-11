@@ -101,9 +101,11 @@ def size_text(mesh: dict, n_ports: int, bbox_mm, nx: int, ny: int, threads: int,
     minutes = run_minutes(mc, n_ports, threads) * speed_factor(kind)[0]      # this computer's measured speed, if known
     out = [f"Simulation of this mesh: {mc:.1f} million cells x {n_ports} excitations, "
            f"roughly {fmt_minutes(minutes)} on {threads} threads here."]
-    if minutes > BIG_RUN_MIN:
+    if minutes > 8 * 60:                        # (was 30 min: a 0.3 million cell coupon with dispersion got the warning)
         out.append("WARNING: too big for this machine - coarsen the mesh, lower fmax, "
                    "use fewer ports or simulate a cut-out of the RF section.")
+    elif minutes > BIG_RUN_MIN:
+        out.append("A long run: fewer excited ports, a lower fmax or the model without dispersion shorten it.")
     w = max(bbox_mm[2] - bbox_mm[0], bbox_mm[3] - bbox_mm[1], 1e-9)
     if max(nx, ny) / FIT_PIXELS > 0.5:          # more than one line per two screen pixels
         out.append(f"At full-board zoom the lines are denser than the screen ({max(nx, ny) / w:.0f} lines/mm) "

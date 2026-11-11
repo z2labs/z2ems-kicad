@@ -83,7 +83,7 @@ def run_gui() -> int:
         lst.Clear()
         for p in presets:
             fit = p["copper_layers"] == copper
-            lst.Append(("  " if fit else "x ") + f"{p['id']}  - {p['fab']} {p['copper_layers']}L  {p.get('description','')[:46]}")
+            lst.Append(("  " if fit else "x ") + f"{p['id']}  - {p['fab']} {p['copper_layers']}L")   # the description is in the pane on the right
         if presets:
             idx = 0
             for i, p in enumerate(presets):

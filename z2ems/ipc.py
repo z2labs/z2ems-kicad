@@ -69,7 +69,9 @@ def connect_error_text(e: BaseException) -> str:
                 "It was most likely started while another KiCad window was open (for example a board opened "
                 "by double click while the KiCad project manager was running): only the KiCad that was started "
                 "first talks to plugins.\n\n"
-                "Close all KiCad windows, then open the project in KiCad and start the PCB editor from there.\n"
+                "Close all KiCad windows, then open the project in KiCad and start the PCB editor from there. "
+                "A KiCad without a window can still be running (after a plugin update, for example): "
+                "check the taskbar and the Task Manager for kicad.exe.\n"
                 "If it still fails, check Preferences > Plugins > Enable KiCad API.\n\n"
                 f"(KiCad said: {t})")
     return f"Cannot connect to KiCad: {t}"

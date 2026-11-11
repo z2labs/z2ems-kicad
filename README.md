@@ -169,6 +169,9 @@ engine server, default `http://127.0.0.1:8765`).
   open (a board opened by double click, a second KiCad). Only the KiCad that was started
   first talks to plugins. Close all KiCad windows, open the project in KiCad and start
   the PCB editor from the project window.
+  After a plugin update from the Plugin and Content Manager, close that window with
+  *Close* and make sure no KiCad is left running without a window (Task Manager,
+  `kicad.exe`) before starting KiCad again.
 - **No buttons, no message.** Check *Preferences → Plugins → Enable KiCad API*, then
   restart KiCad. The same folder can be deleted to make KiCad set the plugin up again.
 - **The engine server.** Simulations run in a small local server

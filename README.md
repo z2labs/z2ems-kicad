@@ -68,6 +68,56 @@ shows and simulates the same ports.
 Two-pad R, L and C footprints become lumped elements in the model (value from the
 footprint), so matching networks and series parts are simulated as placed.
 
+## Validation against measurement
+
+The engine is checked against our own VNA measurements of the Silicon Labs
+MSC-AMS915 antenna matrix (915 MHz printed, chip and helical antennas on
+2-layer FR4, SMA-fed). The boards are measured with a NanoVNA V2 Plus4 (SOL
+calibration at the VNA port, the board on a straight SMA adapter, USB
+connected) and simulated with the Z2 EMS engine the plugin uses. Boards are
+added here once simulation and measurement agree; the rest of the matrix is
+still being worked through.
+
+### WES0115 – panic-button IFA (no matching network)
+
+![WES0115 measured vs simulated |S11| and Smith chart](docs/validation/wes0115_s11.png)
+
+| | resonance | \|S11\| min |
+|---|---|---|
+| Measured (NanoVNA V2 Plus4) | 921 MHz | −17.8 dB |
+| Simulated, board + SMA + NanoVNA case | 926 MHz (+0.5 %) | −14.7 dB |
+| Simulated, board + SMA only | 984 MHz (+6.8 %) | −5.5 dB |
+
+A small antenna on a VNA is not measured alone: the NanoVNA's metal case is
+the other half of the antenna. Simulated without it, the IFA resonates 63 MHz
+too high and is badly matched; with the case modelled as a 91 × 38 × 55 mm
+metal box at the end of the 25 mm SMA jack + adapter, the resonance lands
+within 5 MHz of the measurement, and the third-harmonic dip near 2.9 GHz
+follows as well. When you validate an antenna this way, put the fixture in
+the model.
+
+<table>
+<tr>
+<td width="50%"><img src="docs/validation/wes0115_nanovna_3d.png" alt="WES0115 on the NanoVNA case, simulation model"></td>
+<td width="50%"><img src="docs/validation/wes0115_sma_3d.png" alt="WES0115 SMA jack and coax, case transparent"></td>
+</tr>
+<tr>
+<td>The simulation model: the board on the SMA jack and adapter (a 25 mm
+PTFE coax), on the NanoVNA case (metal box). The port is at the VNA end of
+the coax.</td>
+<td>The same, case made transparent: SMA body and PTFE, centre pin (gold) up
+through the board, port P1 in the coax gap, the ring of ground vias and the
+IFA arm on F.Cu (red).</td>
+</tr>
+<tr>
+<td colspan="2"><img src="docs/validation/wes0115_layers.png" alt="WES0115 copper layers F.Cu and B.Cu"></td>
+</tr>
+<tr>
+<td colspan="2">WES0115 copper as simulated: F.Cu (left) with the IFA arm round
+the ground disc, B.Cu (right).</td>
+</tr>
+</table>
+
 ## Requirements
 
 - KiCad **10** with *Preferences → Plugins → Enable KiCad API* ticked (KiCad offers

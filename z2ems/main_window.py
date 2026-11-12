@@ -9,6 +9,7 @@ a progress bar and opens the result and the 3D viewer when it is done.
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -47,9 +48,33 @@ def spawn(script: str, *args: str) -> None:
     subprocess.Popen([sys.executable, str(HERE / script), *args], stdin=subprocess.DEVNULL, **kw)
 
 
+def ui_pref(key: str, default):
+    from z2ems import config
+    try:
+        return json.loads(config.CONFIG_FILE.read_text(encoding="utf-8")).get(key, default)
+    except (OSError, ValueError, AttributeError):
+        return default
+
+
+def set_ui_pref(key: str, value) -> None:
+    from z2ems import config
+    try:
+        j = json.loads(config.CONFIG_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        j = {}
+    j[key] = value
+    try:
+        config.CONFIG_FILE.write_text(json.dumps(j, indent=1), encoding="utf-8")
+    except OSError:
+        pass
+
+
 class MainWindow(wx.Frame):
     def __init__(self, session):
-        super().__init__(None, title="Z2Labs EMS", style=wx.DEFAULT_FRAME_STYLE | wx.STAY_ON_TOP)
+        # Not "always on top" by default (it covered the board on a laptop screen); the footer tick turns it on
+        # for this window only and is remembered in ~/.z2ems.json ("ui_on_top").
+        style = wx.DEFAULT_FRAME_STYLE | (wx.STAY_ON_TOP if ui_pref("ui_on_top", False) else 0)
+        super().__init__(None, title="Z2Labs EMS", style=style)
         self.s = session
         self.board = session.board
         self.setup_path = session.sidecar_dir / SETUP_FILENAME
@@ -67,13 +92,17 @@ class MainWindow(wx.Frame):
         self.refresh_ports()
         self.refresh_suggestions()
         self.refresh_board()
-        self.Fit()
-        self.SetMinSize(self.GetSize())
+        self.SetMinSize(self.FromDIP(wx.Size(560, 360)))
+        want = self.panel.GetSizer().CalcMin()      # the whole content; a ScrolledWindow alone fits to its minimum
+        want.width = min(want.width, self.FromDIP(780)) + wx.SystemSettings.GetMetric(wx.SYS_VSCROLL_X)
+        self.SetClientSize(want)
         self.CentreOnScreen()
-        try:        # at the right edge of the screen: the middle of the board stays visible
+        try:        # never taller or wider than the screen (laptops): the content scrolls; at the right edge
             area = wx.Display(max(0, wx.Display.GetFromWindow(self))).GetClientArea()
             w, h = self.GetSize()
-            self.SetPosition((area.x + max(0, area.width - w - 24), area.y + max(0, (area.height - h) // 3)))
+            w, h = min(w, area.width - 16), min(h, area.height - 16)
+            self.SetSize(w, h)
+            self.SetPosition((area.x + max(0, area.width - w - 8), area.y + max(0, (area.height - h) // 4)))
         except Exception:  # noqa: BLE001
             pass
         if self.setup.run.last_run:
@@ -86,21 +115,22 @@ class MainWindow(wx.Frame):
         f.SetWeight(wx.FONTWEIGHT_BOLD)
         f.SetPointSize(f.GetPointSize() + 1)
         t.SetFont(f)
-        sizer.Add(t, 0, wx.LEFT | wx.RIGHT | wx.TOP, 12)
-        sizer.Add(wx.StaticLine(parent), 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+        sizer.Add(t, 0, wx.LEFT | wx.RIGHT | wx.TOP, 8)
+        sizer.Add(wx.StaticLine(parent), 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
 
     def _build(self):
-        p = wx.Panel(self)
+        p = self.panel = wx.ScrolledWindow(self, style=wx.VSCROLL)
+        p.SetScrollRate(0, self.FromDIP(12))
         root = wx.BoxSizer(wx.VERTICAL)
 
         self._section(p, root, "Ports   (a port = a + pad on the RF copper and a - reference to ground)")
-        self.list = wx.ListCtrl(p, style=wx.LC_REPORT | wx.LC_SINGLE_SEL, size=(860, 150))
-        for i, (t, w) in enumerate((("", 40), ("+  signal (hot)", 270), ("-  reference (ground)", 300), ("Z0", 60),
-                                    ("Excite", 60), ("Status", 160))):
-            self.list.InsertColumn(i, t, width=w)
+        self.list = wx.ListCtrl(p, style=wx.LC_REPORT | wx.LC_SINGLE_SEL, size=self.FromDIP(wx.Size(700, 96)))
+        for i, (t, w) in enumerate((("", 34), ("+  signal (hot)", 240), ("-  reference (ground)", 220), ("Z0", 50),
+                                    ("Excite", 50), ("Status", 100))):
+            self.list.InsertColumn(i, t, width=self.FromDIP(w))
         self.list.Bind(wx.EVT_LIST_ITEM_SELECTED, self.on_row)
-        root.Add(self.list, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 12)
-        row = wx.BoxSizer(wx.HORIZONTAL)
+        root.Add(self.list, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 8)
+        row = wx.WrapSizer(wx.HORIZONTAL)          # wraps on a narrow window instead of cutting off Z0 / excite
         for label, h, tip in (("+ Port from selection", self.on_add, "Select a connector, a pad, or a pad and its ground pads in the PCB editor"),
                               ("Set + here", self.on_set_plus, "The selected pad becomes + of the highlighted port"),
                               ("Set - here", self.on_set_minus, "The selected ground pads become - of the highlighted port"),
@@ -110,28 +140,29 @@ class MainWindow(wx.Frame):
             b = wx.Button(p, label=label)
             b.SetToolTip(tip) if tip else None
             b.Bind(wx.EVT_BUTTON, h)
-            row.Add(b, 0, wx.RIGHT, 6)
-        row.AddSpacer(14)
-        row.Add(wx.StaticText(p, label="Z0"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 4)
+            row.Add(b, 0, wx.RIGHT | wx.BOTTOM, 4)
+        row.AddSpacer(8)
+        zrow = wx.BoxSizer(wx.HORIZONTAL)               # Z0 and excite wrap together
+        zrow.Add(wx.StaticText(p, label="Z0"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 4)
         self.z0 = wx.SpinCtrlDouble(p, min=1, max=1000, inc=1, initial=50, size=(80, -1))
         self.z0.Bind(wx.EVT_SPINCTRLDOUBLE, self.on_z0)
-        row.Add(self.z0, 0, wx.RIGHT, 8)
+        zrow.Add(self.z0, 0, wx.RIGHT, 8)
         self.excite = wx.CheckBox(p, label="excite")
         self.excite.Bind(wx.EVT_CHECKBOX, self.on_excite)
-        row.Add(self.excite, 0, wx.ALIGN_CENTER_VERTICAL)
-        root.Add(row, 0, wx.ALL, 12)
-        hint = wx.StaticText(p, label="Select in the PCB editor, then click: a connector or an IC pin gives + and its ground pads "
-                                      "as - by itself; Show highlights the port's pads.")
-        hint.SetForegroundColour(GREY)
-        root.Add(hint, 0, wx.LEFT | wx.RIGHT, 12)
-        root.Add(wx.StaticText(p, label="Suggestions - used only when ticked and added:"), 0, wx.LEFT | wx.TOP, 12)
+        zrow.Add(self.excite, 0, wx.ALIGN_CENTER_VERTICAL)
+        row.Add(zrow, 0, wx.BOTTOM, 4)
+        root.Add(row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 8)
+        self.list.SetToolTip("Select in the PCB editor, then click + Port from selection: a connector or an IC pin gives + "
+                             "and its ground pads as - by itself; Show highlights the port's pads.")
+        root.Add(wx.StaticText(p, label="Suggestions - used only when ticked and added:"), 0, wx.LEFT | wx.TOP, 8)
         srow = wx.BoxSizer(wx.HORIZONTAL)
-        self.sugg = wx.CheckListBox(p, size=(700, 70))
+        self.sugg = wx.CheckListBox(p, size=self.FromDIP(wx.Size(500, 52)))
+        self.sugg.SetMinSize(self.FromDIP(wx.Size(400, 52)))        # long suggestion texts must not widen the window
         srow.Add(self.sugg, 1, wx.RIGHT, 8)
         b = wx.Button(p, label="Add ticked")
         b.Bind(wx.EVT_BUTTON, self.on_add_sugg)
         srow.Add(b, 0)
-        root.Add(srow, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 12)
+        root.Add(srow, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 8)
 
         self._section(p, root, "Board")
         g = wx.FlexGridSizer(cols=3, hgap=12, vgap=6)
@@ -153,7 +184,7 @@ class MainWindow(wx.Frame):
         g.Add(wx.StaticText(p, label="Markers"), 0, wx.ALIGN_CENTER_VERTICAL)
         g.Add(self.marker_lbl, 0, wx.ALIGN_CENTER_VERTICAL)
         g.Add(self.markers, 0, wx.ALIGN_CENTER_VERTICAL)
-        root.Add(g, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 12)
+        root.Add(g, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 8)
 
         self._section(p, root, "Simulation")
         frow = wx.BoxSizer(wx.HORIZONTAL)
@@ -166,7 +197,7 @@ class MainWindow(wx.Frame):
         frow.Add(wx.StaticText(p, label="-"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 4)
         frow.Add(self.f1, 0, wx.RIGHT, 4)
         frow.Add(wx.StaticText(p, label="GHz"), 0, wx.ALIGN_CENTER_VERTICAL)
-        root.Add(frow, 0, wx.LEFT | wx.RIGHT, 12)
+        root.Add(frow, 0, wx.LEFT | wx.RIGHT, 8)
         m = self.setup.mat
         mrow = wx.BoxSizer(wx.HORIZONTAL)
         mrow.Add(wx.StaticText(p, label="Losses"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
@@ -188,15 +219,15 @@ class MainWindow(wx.Frame):
         for c in (self.m_disp, self.m_cu, self.m_comp):
             c.Bind(wx.EVT_CHECKBOX, self.on_materials)
         self.m_rq.Bind(wx.EVT_KILL_FOCUS, self.on_materials)
-        mrow.Add(self.m_disp, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 12)
+        mrow.Add(self.m_disp, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
         mrow.Add(self.m_cu, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 6)
         mrow.Add(wx.StaticText(p, label="Rq"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 4)
         mrow.Add(self.m_rq, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 4)
         mrow.Add(wx.StaticText(p, label="µm"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 14)
         mrow.Add(self.m_comp, 0, wx.ALIGN_CENTER_VERTICAL)
-        root.Add(mrow, 0, wx.LEFT | wx.RIGHT | wx.TOP, 12)
+        root.Add(mrow, 0, wx.LEFT | wx.RIGHT | wx.TOP, 8)
         self.est_lbl = wx.StaticText(p, label="")
-        root.Add(self.est_lbl, 0, wx.LEFT | wx.RIGHT | wx.TOP, 12)
+        root.Add(self.est_lbl, 0, wx.LEFT | wx.RIGHT | wx.TOP, 8)
         brow = wx.BoxSizer(wx.HORIZONTAL)
         for label, h in (("Mesh preview", self.on_mesh),
                          ("Fields on board...", self.on_fields),
@@ -214,24 +245,30 @@ class MainWindow(wx.Frame):
         self.sim_btn.SetFont(f)
         self.sim_btn.Bind(wx.EVT_BUTTON, self.on_simulate)
         brow.Add(self.sim_btn, 0)
-        root.Add(brow, 0, wx.EXPAND | wx.ALL, 12)
+        root.Add(brow, 0, wx.EXPAND | wx.ALL, 8)
         self.gauge = wx.Gauge(p, range=1000, size=(-1, 10))
-        root.Add(self.gauge, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 12)
+        root.Add(self.gauge, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 8)
         self.status = wx.StaticText(p, label="Runs go to the engine in the background: KiCad stays free, and a run continues when "
                                             "this window is closed.")
         self.status.SetForegroundColour(GREY)
-        root.Add(self.status, 0, wx.ALL, 12)
+        self.status.Wrap(self.FromDIP(640))
+        root.Add(self.status, 0, wx.ALL, 8)
 
-        root.Add(wx.StaticLine(p), 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 12)
+        root.Add(wx.StaticLine(p), 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 8)
         foot = wx.BoxSizer(wx.HORIZONTAL)
         self.eng_lbl = wx.StaticText(p, label="")
         self.eng_lbl.SetForegroundColour(GREY)
         self.refresh_engine_label()
         foot.Add(self.eng_lbl, 1, wx.ALIGN_CENTER_VERTICAL)
+        self.ontop = wx.CheckBox(p, label="keep on top")
+        self.ontop.SetValue(bool(self.GetWindowStyle() & wx.STAY_ON_TOP))
+        self.ontop.SetToolTip("Keep this window in front of the PCB editor (remembered)")
+        self.ontop.Bind(wx.EVT_CHECKBOX, self.on_ontop)
+        foot.Add(self.ontop, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
         b = wx.Button(p, label="Engine...")
         b.Bind(wx.EVT_BUTTON, self.on_engine)
         foot.Add(b, 0)
-        root.Add(foot, 0, wx.EXPAND | wx.ALL, 12)
+        root.Add(foot, 0, wx.EXPAND | wx.ALL, 8)
         p.SetSizer(root)
         outer = wx.BoxSizer(wx.VERTICAL)
         outer.Add(p, 1, wx.EXPAND)
@@ -417,8 +454,10 @@ class MainWindow(wx.Frame):
 
     def say(self, text: str, warn: bool = False):
         self.status.SetLabel(text)
+        self.status.Wrap(max(self.FromDIP(300), self.GetClientSize().width - self.FromDIP(40)))
         self.status.SetForegroundColour(WARN if warn else wx.BLACK)
         self.Layout()
+        self.status.GetParent().FitInside()
 
     def redraw_markers(self):
         try:
@@ -733,6 +772,12 @@ class MainWindow(wx.Frame):
                               "Z2Labs EMS - result", wx.ICON_INFORMATION | wx.STAY_ON_TOP, self)
         else:
             self.say(f"Run {st}: {j.get('error') or ''}", True)
+
+    def on_ontop(self, _e):
+        on = self.ontop.GetValue()
+        st = self.GetWindowStyle()
+        self.SetWindowStyle(st | wx.STAY_ON_TOP if on else st & ~wx.STAY_ON_TOP)
+        set_ui_pref("ui_on_top", on)
 
     def on_close(self, e):
         self.timer.Stop()

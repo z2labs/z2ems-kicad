@@ -7,14 +7,15 @@ engine, conformal metal edges and a KiCad importer) and brings the results back
 onto the board: S-parameters, line impedance, the FDTD mesh, and the currents and
 voltages of the run as maps and lines on the board and in a 3D viewer.
 
-Status: **0.3.2.** Two-port lines, launches and small RF structures are routine;
+Status: **0.3.3.** Two-port lines, launches and small RF structures are routine;
 large boards work but the run-time estimate tells you when a board is beyond
 what a laptop CPU can do in reasonable time.
 
 ## What it does
 
 The **Z2Labs EMS** button opens one window next to the PCB editor (KiCad stays
-usable while it is open):
+usable while it is open; it fits a laptop screen and scrolls when it has to, and
+*keep on top* in its footer keeps it in front of the editor):
 
 - **Ports.** A port is a **+** pad on the RF copper and a **-** reference to
   ground. Select a connector, an IC pin, or a pad and its ground pads in the PCB

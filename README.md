@@ -13,7 +13,7 @@ voltages of the run as maps and lines on the board and in a 3D viewer.
 a NanoVNA V2 Plus4, simulated with the Z2 EMS engine: the excitation pulse runs up
 the 25 mm SMA coax into the board, the antenna and the instrument's metal case ring,
 and the energy radiates away. Left: vertical cut through the SMA axis; right: the
-plane just above the top copper; 0–4.8 ns. Full-resolution video:
+plane just above the top copper; 0–4.8 ns shown in one minute. Full-resolution video:
 [wes0111_field_animation.mp4](docs/validation/wes0111_field_animation.mp4).*
 
 Status: **0.3.3.** Two-port lines, launches and small RF structures are routine;

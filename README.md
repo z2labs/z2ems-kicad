@@ -7,6 +7,15 @@ engine, conformal metal edges and a KiCad importer) and brings the results back
 onto the board: S-parameters, line impedance, the FDTD mesh, and the currents and
 voltages of the run as maps and lines on the board and in a 3D viewer.
 
+![Electric field of a 915 MHz antenna on a NanoVNA, simulated with Z2 EMS](docs/validation/wes0111_field_animation.gif)
+
+*The electric field of a printed 915 MHz antenna (Silicon Labs WES0111) sitting on
+a NanoVNA V2 Plus4, simulated with the Z2 EMS engine: the excitation pulse runs up
+the 25 mm SMA coax into the board, the antenna and the instrument's metal case ring,
+and the energy radiates away. Left: vertical cut through the SMA axis; right: the
+plane just above the top copper; 0–4.8 ns. Full-resolution video:
+[wes0111_field_animation.mp4](docs/validation/wes0111_field_animation.mp4).*
+
 Status: **0.3.3.** Two-port lines, launches and small RF structures are routine;
 large boards work but the run-time estimate tells you when a board is beyond
 what a laptop CPU can do in reasonable time.

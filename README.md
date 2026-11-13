@@ -16,6 +16,15 @@ and the energy radiates away. Left: vertical cut through the SMA axis; right: th
 plane just above the top copper; 0–4.8 ns shown in one minute. Full-resolution video:
 [wes0111_field_animation.mp4](docs/validation/wes0111_field_animation.mp4).*
 
+![The same field in 3D: volume rendering around the board, the SMA coax and the NanoVNA case](docs/validation/wes0111_field_3d.gif)
+
+*The same simulation in 3D: the whole field around the board (green), the SMA coax
+(gold) and the NanoVNA metal case (blue edges), rendered as a glowing volume while
+the camera turns. Each frame is scaled to its own peak (the gain is shown at the
+bottom), so the ringing of the antenna arm and the case edges stays visible after
+the pulse has passed. Full-resolution video:
+[wes0111_field_3d.mp4](docs/validation/wes0111_field_3d.mp4).*
+
 Status: **0.3.3.** Two-port lines, launches and small RF structures are routine;
 large boards work but the run-time estimate tells you when a board is beyond
 what a laptop CPU can do in reasonable time.
